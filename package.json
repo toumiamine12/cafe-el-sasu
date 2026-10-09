@@ -1,0 +1,17 @@
+{
+  "name": "cafe-el-sasu",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Online preorder, loyalty points and staff dashboard for Café el Sasu",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "dependencies": {
+    "express": "^4.22.3"
+  }
+}
