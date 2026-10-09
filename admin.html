@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <title>Cafe el Sasu | Administrationsbereich</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css"/>
+    <link rel="stylesheet" type="text/css" media="screen" href="admin.css" />
+    <link rel="shortcut icon" type="image/x-icon" href="photos/logo.png"/>
+  </head>
+
+  <body>
+    <nav id="navbar" class="navbar navbar-inverse">
+      <div class="image">
+        <a href="index.html"><img src="photos/logo.png" alt="self" class="self"/></a>
+      </div>
+      <div class="container-fluid">
+        <div class="navbar-header">
+          <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#myNavbar">
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+          </button>
+        </div>
+
+        <div class="collapse navbar-collapse" id="myNavbar">
+          <ul class="nav navbar-nav navbar-right">
+            <li><a href="index.html" class="nav-link normal-link">Startseite</a></li>
+            <li><a href="main2.html" class="nav-link normal-link">Speisekarte</a></li>
+            <li><a href="main3.html" class="nav-link normal-link">Über uns</a></li>
+          </ul>
+        </div>
+      </div>
+    </nav>
+    <div class="admin-container">
+      <h1>Administrationsbereich</h1>
+      <div id="admin-login-wrapper">
+        <h2>Admin Login</h2><br/>
+        <input type="password" id="adminPass" placeholder="Bitte Password eingeben"/><br/><br/>
+        <button onclick="checkAdminPassword()">Anmelden</button>
+        <p id="login-error" style="color: red; display: none">Falsche Password</p>
+      </div>
+
+      <div id="admin-panel">
+        <div class="section-title">Kaffee</div>
+        <div class="upload-row">
+          <input type="text" placeholder="Drink name" />
+          <input type="text" placeholder="Price" />
+          <input type="text" placeholder="Description" />
+          <input type="file" />
+        </div>
+        <div class="drinks-food-grid">
+          <div class="grid-box"></div>
+          <div class="grid-box"></div>
+          <div class="grid-box"></div>
+        </div>
+        <button>Hochladen</button>
+
+        <div class="section-title">Dessert</div>
+        <div class="upload-row">
+          <input type="text" placeholder="Dessert Name" />
+          <input type="text" placeholder="Price" />
+          <input type="text" placeholder="Description" />
+          <input type="file" />
+        </div>
+        <div class="drinks-food-grid">
+          <div class="grid-box"></div>
+          <div class="grid-box"></div>
+          <div class="grid-box"></div>
+        </div>
+        <button>Hochladen</button>
+
+        <div class="section-title">Angebot</div>
+        <div class="upload-row">
+          <input type="text" placeholder="Angebot Name" />
+          <input type="text" placeholder="Price" />
+          <input type="text" placeholder="Description" />
+          <input type="file" />
+        </div>
+        <div class="drinks-food-grid">
+          <div class="grid-box"></div>
+          <div class="grid-box"></div>
+          <div class="grid-box"></div>
+        </div>
+        <button>Hochladen</button>
+
+        <div class="section-title">Slideshow Images</div>
+        <input type="file" />
+        <div class="slideshow-grid">
+          <div class="fake-upload-box"></div>
+          <div class="fake-upload-box"></div>
+          <div class="fake-upload-box"></div>
+          <div class="fake-upload-box"></div>
+          <div class="fake-upload-box"></div>
+          <div class="fake-upload-box"></div>
+        </div>
+        <button>Hochladen</button>
+      </div>
+    </div>
+    <div class="footer">
+      <p class="footer-name">Cafe El Sasu</p>
+      <p>Einestraße 1a , 47799 Krefeld</p>
+      <p>Email: info@cafe-elsasu.de | Phone: +49 02151 8220</p>
+      <p>
+        Follow us: <a href="#">Facebook</a> | <a href="#">Instagram</a> |
+        <a href="#">TikTok</a>
+      </p>
+      <p>&copy; Inhaber: Görkem Sari & Mirac Subasi</p>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+    <script src="admin.js"></script>
+  </body>
+</html>
