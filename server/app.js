@@ -2,7 +2,7 @@ import express from 'express';
 import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { hashPassword, verifyPassword, tx } from './db.js';
-import { tierFor, validatePickup, priceOrder } from './rules.js';
+import { tierFor, validatePickup, priceOrder, pointsFor } from './rules.js';
 
 const SESSION_DAYS = 30;
 const PUBLIC = fileURLToPath(new URL('../public', import.meta.url));
@@ -154,6 +154,101 @@ export function createApp(db) {
   app.get('/api/admin/orders', staff, (req, res) =>
     res.json(withItems(q(`SELECT o.*, u.name customer, u.member_id FROM orders o JOIN users u ON u.id = o.user_id
       WHERE o.status IN ('new','preparing','ready') ORDER BY o.pickup_at`).all())));
+
+  app.patch('/api/admin/orders/:id', staff, (req, res) => {
+    const { status } = req.body;
+    if (!['preparing', 'ready', 'picked_up', 'cancelled'].includes(status)) fail(400, 'Ungültiger Status');
+    tx(db, () => {
+      const o = q('SELECT * FROM orders WHERE id = ?').get(Number(req.params.id));
+      if (!o) fail(404, 'Bestellung nicht gefunden');
+      if (['picked_up', 'cancelled'].includes(o.status)) fail(409, 'Bestellung ist bereits abgeschlossen');
+      q('UPDATE orders SET status = ? WHERE id = ?').run(status, o.id);
+      if (status === 'picked_up') {
+        const pts = pointsFor(o.total_cents);
+        q('UPDATE users SET points = points + ?, lifetime_points = lifetime_points + ? WHERE id = ?').run(pts, pts, o.user_id);
+      }
+      if (status === 'cancelled' && o.reward_points) q('UPDATE users SET points = points + ? WHERE id = ?').run(o.reward_points, o.user_id);
+    });
+    res.json({ ok: true });
+  });
+
+  app.post('/api/admin/shifts/clock', staff, (req, res) => {
+    const open = tx(db, () => {
+      const s = q('SELECT id FROM shifts WHERE user_id = ? AND clock_out IS NULL').get(req.user.id);
+      const now = new Date().toISOString();
+      if (s) q('UPDATE shifts SET clock_out = ? WHERE id = ?').run(now, s.id);
+      else q('INSERT INTO shifts (user_id, clock_in) VALUES (?, ?)').run(req.user.id, now);
+      return !s;
+    });
+    res.json({ open });
+  });
+
+  // Hours worked since a date; open shifts count up to now.
+  const HOURS_SQL = `COALESCE(SUM((julianday(COALESCE(s.clock_out, ?)) - julianday(s.clock_in)) * 24), 0)`;
+  const sinceDays = (d) => new Date(Date.now() - d * 864e5).toISOString();
+
+  app.get('/api/admin/shifts', staff, (req, res) => {
+    const now = new Date().toISOString();
+    const hours = q(`SELECT ${HOURS_SQL} h FROM shifts s WHERE s.user_id = ? AND s.clock_in >= ?`);
+    const people = req.user.role === 'admin'
+      ? q("SELECT * FROM users WHERE role IN ('staff','admin') ORDER BY name").all()
+      : [req.user];
+    res.json(people.map((u) => ({
+      id: u.id, name: u.name, member_id: u.member_id, role: u.role, hourly_wage: u.hourly_wage,
+      open: !!q('SELECT 1 FROM shifts WHERE user_id = ? AND clock_out IS NULL').get(u.id),
+      hours_week: hours.get(now, u.id, sinceDays(7)).h,
+      hours_month: hours.get(now, u.id, sinceDays(30)).h,
+    })));
+  });
+
+  // --- admin only -----------------------------------------------------------
+  const admin = requireRole('admin');
+  const RANGES = { day: 1, week: 7, month: 30 };
+
+  app.get('/api/admin/finance', admin, (req, res) => {
+    const days = RANGES[req.query.range];
+    if (!days) fail(400, 'range muss day, week oder month sein');
+    const since = sinceDays(days);
+    const { revenue, orders } = q(`SELECT COALESCE(SUM(total_cents), 0) revenue, COUNT(*) orders FROM orders
+      WHERE status = 'picked_up' AND pickup_at >= ?`).get(since);
+    const wages = Math.round(q(`SELECT COALESCE(SUM((julianday(COALESCE(s.clock_out, ?)) - julianday(s.clock_in)) * 24 * u.hourly_wage), 0) w
+      FROM shifts s JOIN users u ON u.id = s.user_id WHERE s.clock_in >= ?`).get(new Date().toISOString(), since).w);
+    const top = q(`SELECT m.name, SUM(oi.qty) qty FROM order_items oi JOIN orders o ON o.id = oi.order_id JOIN menu_items m ON m.id = oi.menu_item_id
+      WHERE o.status = 'picked_up' AND o.pickup_at >= ? GROUP BY m.id ORDER BY qty DESC LIMIT 5`).all(since);
+    res.json({ revenue, wages, profit: revenue - wages, orders, top });
+  });
+
+  const MENU_FIELDS = {
+    name: (v) => typeof v === 'string' && v.trim().length > 0 && v.length <= 80,
+    description: (v) => typeof v === 'string' && v.length <= 300,
+    category: (v) => ['coffee', 'cold', 'cake', 'pastry'].includes(v),
+    price_cents: (v) => Number.isInteger(v) && v > 0 && v < 100000,
+    photo: (v) => typeof v === 'string' && /^photos\/[\w.-]+$/.test(v),
+    tags: (v) => typeof v === 'string' && v.length <= 100,
+    active: (v) => v === 0 || v === 1,
+  };
+  const menuFields = (body) => Object.entries(body).filter(([k]) => k in MENU_FIELDS).map(([k, v]) => {
+    if (!MENU_FIELDS[k](v)) fail(400, `Ungültiger Wert für ${k}`);
+    return [k, v];
+  });
+
+  app.get('/api/admin/menu', admin, (req, res) => res.json(q('SELECT * FROM menu_items ORDER BY category, name').all()));
+
+  app.post('/api/admin/menu', admin, (req, res) => {
+    const fields = menuFields(req.body);
+    const keys = fields.map(([k]) => k);
+    if (!['name', 'category', 'price_cents'].every((k) => keys.includes(k))) fail(400, 'Name, Kategorie und Preis sind Pflicht');
+    const { lastInsertRowid } = q(`INSERT INTO menu_items (${keys}) VALUES (${keys.map(() => '?')})`).run(...fields.map(([, v]) => v));
+    res.status(201).json(q('SELECT * FROM menu_items WHERE id = ?').get(lastInsertRowid));
+  });
+
+  app.patch('/api/admin/menu/:id', admin, (req, res) => {
+    const fields = menuFields(req.body);
+    if (!fields.length) fail(400, 'Keine Änderungen');
+    const r = q(`UPDATE menu_items SET ${fields.map(([k]) => `${k} = ?`)} WHERE id = ?`).run(...fields.map(([, v]) => v), Number(req.params.id));
+    if (!r.changes) fail(404, 'Artikel nicht gefunden');
+    res.json(q('SELECT * FROM menu_items WHERE id = ?').get(Number(req.params.id)));
+  });
 
   // --- errors ---------------------------------------------------------------
   app.use('/api', (req, res) => res.status(404).json({ error: 'Nicht gefunden' }));

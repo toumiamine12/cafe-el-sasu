@@ -168,3 +168,70 @@ test('logout ends the session', async () => {
   await c('POST', '/api/logout');
   assert.equal((await c('GET', '/api/me')).status, 401);
 });
+
+// --- staff / admin ---------------------------------------------------------
+
+async function newOrder(c) {
+  return (await c('POST', '/api/orders', { items: [{ id: itemByName('Cheesecake').id, qty: 2 }], pickup_at: nextOpen() })).body;
+}
+
+test('staff moves order to picked_up, points credited once', async () => {
+  const anna = await login('SASU-1003', 'demo123');
+  const lena = await login('SASU-1001', 'staff123');
+  const o = await newOrder(anna);
+  const before = (await anna('GET', '/api/me')).body;
+  assert.ok((await lena('GET', '/api/admin/orders')).body.some((x) => x.id === o.id));
+  for (const status of ['preparing', 'ready', 'picked_up']) {
+    assert.equal((await lena('PATCH', `/api/admin/orders/${o.id}`, { status })).status, 200);
+  }
+  assert.equal((await lena('PATCH', `/api/admin/orders/${o.id}`, { status: 'picked_up' })).status, 409);
+  const after = (await anna('GET', '/api/me')).body;
+  assert.equal(after.points - before.points, Math.floor(o.total_cents / 100));
+  assert.equal(after.lifetime_points - before.lifetime_points, Math.floor(o.total_cents / 100));
+  assert.equal((await lena('PATCH', `/api/admin/orders/${o.id}`, { status: 'bogus' })).status, 400);
+});
+
+test('staff cannot see finance or edit menu', async () => {
+  const lena = await login('SASU-1001', 'staff123');
+  assert.equal((await lena('GET', '/api/admin/finance?range=month')).status, 403);
+  assert.equal((await lena('PATCH', '/api/admin/menu/1', { price_cents: 1 })).status, 403);
+});
+
+test('clock toggles one shift at a time', async () => {
+  const yusuf = await login('SASU-1002', 'staff123');
+  const before = db.prepare('SELECT COUNT(*) n FROM shifts WHERE user_id = 3').get().n;
+  assert.equal((await yusuf('POST', '/api/admin/shifts/clock')).body.open, true);
+  assert.equal((await yusuf('POST', '/api/admin/shifts/clock')).body.open, false);
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM shifts WHERE user_id = 3').get().n, before + 1);
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM shifts WHERE clock_out IS NULL').get().n, 0);
+  const mine = (await yusuf('GET', '/api/admin/shifts')).body;
+  assert.equal(mine.length, 1);
+  assert.equal(mine[0].member_id, 'SASU-1002');
+});
+
+test('admin sees all staff hours and finance', async () => {
+  const admin = await login('SASU-1000', 'admin123');
+  const shifts = (await admin('GET', '/api/admin/shifts')).body;
+  assert.ok(shifts.length >= 2);
+  assert.ok(shifts.find((s) => s.member_id === 'SASU-1001').hours_month > 0);
+
+  const f = (await admin('GET', '/api/admin/finance?range=month')).body;
+  const since = new Date(Date.now() - 30 * 864e5).toISOString();
+  const expected = db.prepare("SELECT SUM(total_cents) s FROM orders WHERE status = 'picked_up' AND pickup_at >= ?").get(since).s;
+  assert.equal(f.revenue, expected);
+  assert.ok(f.wages > 0);
+  assert.equal(f.profit, f.revenue - f.wages);
+  assert.ok(f.top.length > 0 && f.top.length <= 5);
+  assert.equal((await admin('GET', '/api/admin/finance?range=year')).status, 400);
+});
+
+test('admin edits and adds menu items', async () => {
+  const admin = await login('SASU-1000', 'admin123');
+  const id = itemByName('Espresso').id;
+  assert.equal((await admin('PATCH', `/api/admin/menu/${id}`, { price_cents: 279 })).status, 200);
+  assert.equal(itemByName('Espresso').price_cents, 279);
+  assert.equal((await admin('PATCH', `/api/admin/menu/${id}`, { price_cents: -5 })).status, 400);
+  const r = await admin('POST', '/api/admin/menu', { name: 'Ristretto', category: 'coffee', price_cents: 259 });
+  assert.equal(r.status, 201);
+  assert.ok((await admin('GET', '/api/admin/menu')).body.some((m) => m.name === 'Ristretto'));
+});
