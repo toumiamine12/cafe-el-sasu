@@ -3,14 +3,16 @@
   <head>
     <meta charset="utf-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <title>Cafe el Sasu | Administrationsbereich</title>
+    <title>Admin · Cafe el Sasu</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css"/>
-    <link rel="stylesheet" type="text/css" media="screen" href="admin.css" />
+    <link rel="stylesheet" type="text/css" media="screen" href="main.css" />
+    <link rel="stylesheet" href="shop.css" />
     <link rel="shortcut icon" type="image/x-icon" href="photos/logo.png"/>
   </head>
 
   <body>
+    <!-----------------------------------------------------Navigation Bar-------------------------------------------------->
     <nav id="navbar" class="navbar navbar-inverse">
       <div class="image">
         <a href="index.html"><img src="photos/logo.png" alt="self" class="self"/></a>
@@ -33,71 +35,68 @@
         </div>
       </div>
     </nav>
-    <div class="admin-container">
-      <h1>Administrationsbereich</h1>
-      <div id="admin-login-wrapper">
-        <h2>Admin Login</h2><br/>
-        <input type="password" id="adminPass" placeholder="Bitte Password eingeben"/><br/><br/>
-        <button onclick="checkAdminPassword()">Anmelden</button>
-        <p id="login-error" style="color: red; display: none">Falsche Password</p>
+    
+    <main class="page" style="max-width:1100px">
+      <section class="panel" id="gate" hidden style="max-width:440px;margin:0 auto">
+        <h2>Mitarbeiter-Login</h2>
+        <form id="gate-form" class="form-cafe">
+          <label for="gid">Mitgliedsnummer oder E-Mail</label>
+          <input id="gid" autocomplete="username" placeholder="SASU-1001" />
+          <label for="gpw">Passwort</label>
+          <input id="gpw" type="password" autocomplete="current-password" />
+          <p class="error" id="gate-error" role="alert"></p>
+          <button class="btn-cafe" type="submit" style="width:100%">Einloggen</button>
+        </form>
+        <p class="muted" style="font-size:13px;text-align:center;margin-top:12px">Demo: SASU-1000 / admin123 · SASU-1001 / staff123</p>
+      </section>
+
+      <div id="dash" hidden>
+        <div class="tabs" id="admin-tabs" role="tablist">
+          <button data-tab="orders" aria-pressed="true">Bestellungen</button>
+          <button data-tab="staff">Personal</button>
+          <button data-tab="finance" data-admin>Finanzen</button>
+          <button data-tab="menu" data-admin>Speisekarte</button>
+        </div>
+
+        <section class="panel" data-panel="orders">
+          <h2>Offene Bestellungen</h2>
+          <div id="open-orders" aria-live="polite"></div>
+        </section>
+
+        <section class="panel" data-panel="staff" hidden>
+          <h2>Arbeitszeit</h2>
+          <p><button class="btn-cafe" id="clock"></button></p>
+          <table class="table" id="staff-table"></table>
+        </section>
+
+        <section class="panel" data-panel="finance" hidden>
+          <h2>Finanzen</h2>
+          <div class="tabs" id="range" style="justify-content:flex-start">
+            <button data-range="day">Heute</button>
+            <button data-range="week" aria-pressed="true">7 Tage</button>
+            <button data-range="month">30 Tage</button>
+          </div>
+          <div class="stats" id="stats"></div>
+          <h3>Top 5 Artikel</h3>
+          <div id="top"></div>
+        </section>
+
+        <section class="panel" data-panel="menu" hidden>
+          <h2>Speisekarte verwalten</h2>
+          <form id="new-item" class="form-cafe stats">
+            <div><label for="ni-name">Name</label><input id="ni-name" required /></div>
+            <div><label for="ni-cat">Kategorie</label>
+              <select id="ni-cat"><option value="coffee">Kaffee</option><option value="cold">Kalt</option><option value="cake">Kuchen</option><option value="pastry">Gebäck</option></select></div>
+            <div><label for="ni-price">Preis (€)</label><input id="ni-price" type="number" step="0.01" min="0.01" required /></div>
+            <div><label>&nbsp;</label><button class="btn-cafe" type="submit">Hinzufügen</button></div>
+          </form>
+          <table class="table" id="menu-table"></table>
+        </section>
+        <p style="text-align:center"><button class="btn-ghost" id="logout">Ausloggen</button></p>
       </div>
+    </main>
 
-      <div id="admin-panel">
-        <div class="section-title">Kaffee</div>
-        <div class="upload-row">
-          <input type="text" placeholder="Drink name" />
-          <input type="text" placeholder="Price" />
-          <input type="text" placeholder="Description" />
-          <input type="file" />
-        </div>
-        <div class="drinks-food-grid">
-          <div class="grid-box"></div>
-          <div class="grid-box"></div>
-          <div class="grid-box"></div>
-        </div>
-        <button>Hochladen</button>
-
-        <div class="section-title">Dessert</div>
-        <div class="upload-row">
-          <input type="text" placeholder="Dessert Name" />
-          <input type="text" placeholder="Price" />
-          <input type="text" placeholder="Description" />
-          <input type="file" />
-        </div>
-        <div class="drinks-food-grid">
-          <div class="grid-box"></div>
-          <div class="grid-box"></div>
-          <div class="grid-box"></div>
-        </div>
-        <button>Hochladen</button>
-
-        <div class="section-title">Angebot</div>
-        <div class="upload-row">
-          <input type="text" placeholder="Angebot Name" />
-          <input type="text" placeholder="Price" />
-          <input type="text" placeholder="Description" />
-          <input type="file" />
-        </div>
-        <div class="drinks-food-grid">
-          <div class="grid-box"></div>
-          <div class="grid-box"></div>
-          <div class="grid-box"></div>
-        </div>
-        <button>Hochladen</button>
-
-        <div class="section-title">Slideshow Images</div>
-        <input type="file" />
-        <div class="slideshow-grid">
-          <div class="fake-upload-box"></div>
-          <div class="fake-upload-box"></div>
-          <div class="fake-upload-box"></div>
-          <div class="fake-upload-box"></div>
-          <div class="fake-upload-box"></div>
-          <div class="fake-upload-box"></div>
-        </div>
-        <button>Hochladen</button>
-      </div>
-    </div>
+    <!--------------------------------------------------------Footer Section------------------------------------------------->
     <div class="footer">
       <p class="footer-name">Cafe El Sasu</p>
       <p>Einestraße 1a , 47799 Krefeld</p>
@@ -111,6 +110,7 @@
 
     <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
     <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+    <script src="app.js"></script>
     <script src="admin.js"></script>
   </body>
 </html>

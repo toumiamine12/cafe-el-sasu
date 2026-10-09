@@ -156,3 +156,15 @@
 }
 #toast.show { opacity: 1; transform: translate(-50%, 0); }
 @media (prefers-reduced-motion: reduce) { #toast { transition: none; } }
+
+/* --- admin --- */
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin: 16px 0; }
+.stat { background: #fff; border-radius: 12px; padding: 16px; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06); }
+.stat .label { color: var(--muted); font-size: 13px; }
+.stat .value { font-size: 26px; font-weight: bold; font-variant-numeric: tabular-nums; }
+.stat .value.neg { color: #b3261e; }
+.table td, .table th { vertical-align: middle !important; }
+.table input[type="number"] { width: 90px; padding: 4px; border: 1px solid #d8c8b4; border-radius: 6px; }
+.bar { background: var(--brown); height: 10px; border-radius: 5px; }
+
+html { background: url("photos/background.jpg") center / cover; }

@@ -54,6 +54,8 @@ const USERS = [
   ['SASU-1003', 'Anna Schmidt', 'anna@example.com', 'demo123', 'customer', 0, 80, 80, '1998-03-14'],
   ['SASU-1004', 'Mehmet Kaya', 'mehmet@example.com', 'demo123', 'customer', 0, 260, 140, '1990-11-02'],
   ['SASU-1005', 'Sophie Wagner', 'sophie@example.com', 'demo123', 'customer', 0, 620, 310, '1995-06-21'],
+  // Bulk history so the finance dashboard shows a realistic month. No usable password.
+  ['SASU-1006', 'Laufkundschaft', 'gast@cafe-elsasu.de', null, 'customer', 0, 0, 0, null],
 ];
 
 const daysAgo = (d, hour) => {
@@ -72,7 +74,7 @@ export function seed(db) {
 
     const u = db.prepare(`INSERT INTO users (member_id, name, email, password_hash, role, hourly_wage, lifetime_points, points, birthday)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-    for (const [mid, n, e, pw, role, wage, life, pts, bd] of USERS) u.run(mid, n, e, hashPassword(pw), role, wage, life, pts, bd);
+    for (const [mid, n, e, pw, role, wage, life, pts, bd] of USERS) u.run(mid, n, e, pw ? hashPassword(pw) : 'x:x', role, wage, life, pts, bd);
 
     // A month of history: orders from the 3 demo customers, shifts for the 2 staff.
     const items = db.prepare('SELECT id, price_cents FROM menu_items').all();
@@ -81,11 +83,12 @@ export function seed(db) {
     const oi = db.prepare('INSERT INTO order_items (order_id, menu_item_id, qty, unit_price_cents) VALUES (?, ?, ?, ?)');
     const s = db.prepare('INSERT INTO shifts (user_id, clock_in, clock_out) VALUES (?, ?, ?)');
     for (let d = 1; d <= 30; d++) {
-      for (const userId of [4, 5, 6]) {
-        if ((d + userId) % 3) continue;
-        const picks = [items[(d * userId) % items.length], items[(d + userId * 7) % items.length]];
+      const guestOrders = 14 + ((d * 7) % 9);
+      for (const [n, userId] of [[4, 4], [5, 5], [6, 6], ...Array.from({ length: guestOrders }, (_, k) => [k + 10, 7])]) {
+        if (userId < 7 && (d + userId) % 3) continue;
+        const picks = [items[(d * n) % items.length], items[(d + n * 7) % items.length]];
         const total = picks.reduce((sum, i) => sum + i.price_cents, 0);
-        const at = daysAgo(d, 10 + userId);
+        const at = daysAgo(d, 8 + (n % 12));
         const { lastInsertRowid } = o.run(userId, at, total, total, at);
         for (const i of picks) oi.run(lastInsertRowid, i.id, 1, i.price_cents);
       }

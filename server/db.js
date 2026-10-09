@@ -74,7 +74,8 @@ export function hashPassword(pw) {
 
 export function verifyPassword(pw, stored) {
   const [salt, hash] = stored.split(':');
-  return timingSafeEqual(scryptSync(pw, salt, 32), Buffer.from(hash, 'hex'));
+  const expected = Buffer.from(hash || '', 'hex');
+  return expected.length === 32 && timingSafeEqual(scryptSync(pw, salt, 32), expected);
 }
 
 export function openDb(file = 'data/cafe.db') {

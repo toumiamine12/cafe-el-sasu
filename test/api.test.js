@@ -244,3 +244,7 @@ test('pickup slots are all valid and 15 minutes apart', async () => {
   for (const s of slots) assert.equal(validatePickup(new Date(s)), null, s);
   assert.equal(new Date(slots[0]).getUTCMinutes() % 15, 0);
 });
+
+test('walk-in account cannot log in', async () => {
+  assert.equal((await client()('POST', '/api/login', { id: 'gast@cafe-elsasu.de', password: 'x' })).status, 401);
+});
