@@ -38,7 +38,7 @@ export function createApp(db) {
   function startSession(res, userId) {
     const token = randomBytes(32).toString('hex');
     q('INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)').run(token, userId, Date.now() + SESSION_DAYS * 864e5);
-    res.cookie('sid', token, { httpOnly: true, sameSite: 'lax', maxAge: SESSION_DAYS * 864e5 });
+    res.cookie('sid', token, { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: SESSION_DAYS * 864e5 });
   }
 
   const requireRole = (...roles) => (req, res, next) => {

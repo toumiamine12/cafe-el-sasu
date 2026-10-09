@@ -1,22 +1,84 @@
-# Café el Sasu
+# Café el Sasu — Online-Vorbestellung
 
-Static website for a café in Krefeld — home page with offers and a carousel, menu with coffee/dessert slideshows, an "about us" page, and a demo admin page.
+A full-stack preorder app for a café in Krefeld. Customers log in with a member ID, order coffee and cakes for pickup, collect points and unlock rewards. Staff run the order queue and clock their hours, and the owner sees the finances.
 
-Built with plain HTML, CSS, JavaScript and Bootstrap 3.
+Built with **Node.js, Express and SQLite** (`node:sqlite`). The frontend is plain HTML/CSS/JS on top of the original Bootstrap 3 site, with no build step. The only runtime dependency is `express`.
 
-## Pages
+| Menu | Cart & pickup |
+|---|---|
+| ![Menu](docs/screenshots/menu.png) | ![Cart](docs/screenshots/cart.png) |
+| **Member account** | **Admin finance** |
+| ![Account](docs/screenshots/account.png) | ![Finance](docs/screenshots/admin-finance.png) |
 
-| File | Page |
-|------|------|
-| `index.html` | Startseite (home) |
-| `main2.html` | Speisekarte (menu) |
-| `main3.html` | Über uns (about) |
-| `admin.html` | Admin demo (password: `admin123`, client-side only — not real auth) |
+## Features
+
+**Customers**
+- Register and get a member ID (`SASU-1007`, …); log in with the member ID or email
+- Menu of 34 items with category tabs and allergen/vegan tags; add to cart from the menu or home page
+- Preorder for pickup: only valid 15-minute slots inside opening hours, at least 15 min ahead
+- Pay at pickup, cancel while the order is still "Eingegangen"
+- Live order status on the account page (refreshes every 10 s, toast when ready)
+- Reorder a past order in one click
+
+**Loyalty**
+- 1 point per €1, credited when the order is picked up
+- Tiers by lifetime points: **Bronze** → **Silver** (200, 5 % off) → **Gold** (500, 10 % off)
+- Rewards: free pastry (50), free coffee (100), free cake (250), birthday coffee for Gold members
+- Redeeming never drops your tier; cancelling refunds the reward points
+
+**Staff & admin** (`/admin.html`)
+- Order queue: Eingegangen → In Zubereitung → Abholbereit → Abgeholt
+- Clock in/out, hours per person for the last 7 and 30 days
+- Admin only: revenue, wage cost, profit, order count, average order value, top 5 items (today / 7 / 30 days)
+- Admin only: edit prices, hide items, add new items
+
+**Security basics**: scrypt-hashed passwords, HttpOnly session cookies, prices always taken from the database, server-side role checks on every admin route, and all user text escaped before rendering.
 
 ## Run locally
 
+Needs Node.js 22.13 or newer.
+
 ```bash
-python3 -m http.server 8000
+npm install
+npm start          # http://localhost:3000
+npm test           # 31 API + rules tests
 ```
 
-Then open http://localhost:8000.
+The database (`data/cafe.db`) is created and filled with demo data on first start. Delete `data/` to reset.
+
+### Demo logins
+
+| Role | Member ID | Password |
+|---|---|---|
+| Admin | `SASU-1000` | `admin123` |
+| Staff | `SASU-1001` | `staff123` |
+| Customer (Bronze) | `SASU-1003` | `demo123` |
+| Customer (Silver) | `SASU-1004` | `demo123` |
+| Customer (Gold) | `SASU-1005` | `demo123` |
+
+## Deploy (free, Render)
+
+1. Push this repo to GitHub
+2. On [render.com](https://render.com): **New → Blueprint** → pick the repo (it reads `render.yaml`)
+3. Open the `*.onrender.com` URL
+
+The free plan has no persistent disk, so the demo data resets on every restart. That's fine for a demo; a real deployment needs a persistent disk or a hosted database.
+
+## Project structure
+
+```
+server.js            entry point
+server/app.js        Express routes (auth, orders, admin)
+server/rules.js      pure business rules: tiers, opening hours, pricing, points
+server/db.js         schema, password hashing
+server/seed.js       demo menu, users, a month of order history
+public/              the website (HTML/CSS/JS, photos)
+test/                node --test suites
+```
+
+## Next ideas
+
+- QR code on the member card to scan at the counter
+- Invite a friend: both get 50 points
+- Limit orders per pickup slot so the kitchen isn't flooded
+- Online payment (Stripe) and email confirmations

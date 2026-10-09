@@ -5,8 +5,8 @@
   "type": "module",
   "description": "Online preorder, loyalty points and staff dashboard for Café el Sasu",
   "scripts": {
-    "start": "node server.js",
-    "test": "node --test"
+    "start": "node --disable-warning=ExperimentalWarning server.js",
+    "test": "node --disable-warning=ExperimentalWarning --test"
   },
   "engines": {
     "node": ">=22.13"
