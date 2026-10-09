@@ -79,7 +79,8 @@ export function createApp(db) {
     res.clearCookie('sid').json({ ok: true });
   });
 
-  app.get('/api/me', loggedIn, (req, res) => res.json(publicUser(req.user)));
+  // 200 + null when logged out, so pages can check login without a console error.
+  app.get('/api/me', (req, res) => res.json(req.user ? publicUser(req.user) : null));
 
   // --- menu & rewards -------------------------------------------------------
   app.get('/api/menu', (req, res) => res.json(q('SELECT * FROM menu_items WHERE active = 1 ORDER BY category, name').all()));
@@ -88,6 +89,16 @@ export function createApp(db) {
     .filter((r) => !r.birthday_only || (tierFor(u.lifetime_points).name === 'Gold' && isBirthday(u)));
 
   app.get('/api/rewards', loggedIn, (req, res) => res.json(rewardsFor(req.user)));
+
+  // Next 60 valid pickup times on 15-minute marks, within the next 3 days.
+  app.get('/api/pickup-slots', (req, res) => {
+    const slots = [];
+    const t = new Date(Math.ceil(Date.now() / 900e3) * 900e3);
+    for (const end = Date.now() + 3 * 864e5; t < end && slots.length < 60; t.setTime(t.getTime() + 900e3)) {
+      if (!validatePickup(t)) slots.push(t.toISOString());
+    }
+    res.json(slots);
+  });
 
   // --- orders ---------------------------------------------------------------
   const withItems = (orders) => {

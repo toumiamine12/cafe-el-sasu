@@ -166,7 +166,9 @@ test('customer is blocked from admin API', async () => {
 test('logout ends the session', async () => {
   const c = await login('SASU-1003', 'demo123');
   await c('POST', '/api/logout');
-  assert.equal((await c('GET', '/api/me')).status, 401);
+  const r = await c('GET', '/api/me');
+  assert.equal(r.status, 200);
+  assert.equal(r.body, null);
 });
 
 // --- staff / admin ---------------------------------------------------------
@@ -234,4 +236,11 @@ test('admin edits and adds menu items', async () => {
   const r = await admin('POST', '/api/admin/menu', { name: 'Ristretto', category: 'coffee', price_cents: 259 });
   assert.equal(r.status, 201);
   assert.ok((await admin('GET', '/api/admin/menu')).body.some((m) => m.name === 'Ristretto'));
+});
+
+test('pickup slots are all valid and 15 minutes apart', async () => {
+  const slots = (await client()('GET', '/api/pickup-slots')).body;
+  assert.ok(slots.length > 0 && slots.length <= 60);
+  for (const s of slots) assert.equal(validatePickup(new Date(s)), null, s);
+  assert.equal(new Date(slots[0]).getUTCMinutes() % 15, 0);
 });

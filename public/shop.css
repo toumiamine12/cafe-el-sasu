@@ -1,0 +1,158 @@
+/* Shared styles for shop pages: menu grid, cart, account, forms. Loaded after each page's own CSS. */
+:root {
+    --brown: #b47b47;
+    --brown-dark: #8a5c34;
+    --ink: #3b2615;
+    --muted: #6e5c4a;
+    --card: rgba(255, 250, 242, 0.94);
+}
+
+.page {
+    max-width: 960px;
+    margin: 30px auto;
+    padding: 0 16px;
+    font-family: sans-serif;
+    color: var(--ink);
+}
+.panel {
+    background: var(--card);
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    padding: 24px;
+    margin-bottom: 24px;
+}
+.panel h2 {
+    margin-top: 0;
+    font-family: serif;
+    font-style: oblique;
+    font-weight: bold;
+}
+.muted { color: var(--muted); }
+
+.btn-cafe {
+    background: var(--brown);
+    color: #fff;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: bold;
+}
+.btn-cafe:hover, .btn-cafe:focus { background: var(--brown-dark); color: #fff; }
+.btn-cafe:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-ghost {
+    background: none;
+    border: 1px solid var(--brown);
+    color: var(--brown-dark);
+    padding: 6px 14px;
+    border-radius: 10px;
+    cursor: pointer;
+}
+
+/* --- forms --- */
+.form-cafe label { display: block; margin: 12px 0 4px; font-weight: bold; }
+.form-cafe input, .form-cafe select {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #d8c8b4;
+    border-radius: 8px;
+    font-size: 16px; /* no zoom on iOS */
+}
+.error { color: #b3261e; min-height: 1.4em; margin-top: 8px; }
+
+/* --- menu --- */
+.tabs { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 20px 0; }
+.tabs button {
+    background: var(--card);
+    border: 1px solid var(--brown);
+    color: var(--brown-dark);
+    border-radius: 20px;
+    padding: 8px 18px;
+    font-weight: bold;
+}
+.tabs button[aria-pressed="true"] { background: var(--brown); color: #fff; }
+.menu-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 24px;
+    max-width: 1100px;
+    margin: 0 auto 40px;
+    padding: 0 16px;
+}
+.item-card {
+    background: var(--card);
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    padding: 15px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+}
+.item-card img { width: 100%; height: 200px; object-fit: cover; border-radius: 12px; }
+.item-card h3 { font-size: 18px; margin: 12px 0 6px; font-weight: bold; color: var(--ink); }
+.item-card p { font-size: 13px; color: var(--muted); flex: 1; }
+.item-card .price { font-weight: bold; color: var(--ink); font-size: 16px; }
+.tag {
+    display: inline-block;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: #efe3d3;
+    color: var(--muted);
+    margin: 2px;
+}
+.tag.vegan { background: #dcefd8; color: #2f6b26; }
+
+/* --- cart & orders --- */
+.row-line {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid #eadccb;
+}
+.row-line img { width: 56px; height: 56px; object-fit: cover; border-radius: 8px; }
+.row-line .grow { flex: 1; min-width: 0; }
+.qty button { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--brown); background: #fff; }
+.qty span { display: inline-block; width: 28px; text-align: center; }
+.totals { text-align: right; margin-top: 12px; }
+.totals .total { font-size: 22px; font-weight: bold; }
+.status { font-weight: bold; padding: 2px 10px; border-radius: 10px; background: #efe3d3; white-space: nowrap; }
+.status.ready { background: #dcefd8; color: #2f6b26; }
+
+/* --- member card --- */
+.member-card {
+    background: linear-gradient(135deg, #3b2615, #8a5c34);
+    color: #fff;
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 24px;
+}
+.member-card.Silver { background: linear-gradient(135deg, #5d6066, #b8bcc4); }
+.member-card.Gold { background: linear-gradient(135deg, #7a5a12, #d9b24c); }
+.member-card .mid { font-family: monospace; font-size: 22px; letter-spacing: 2px; }
+.member-card .pts { font-size: 40px; font-weight: bold; }
+.progress-cafe { background: rgba(255, 255, 255, 0.3); height: 10px; border-radius: 5px; overflow: hidden; margin-top: 8px; }
+.progress-cafe div { background: #fff; height: 100%; }
+
+/* --- map --- */
+.map-section { background-image: url("photos/background.jpg"); background-size: cover; padding: 30px 16px; text-align: center; }
+.map-section iframe { width: 100%; max-width: 900px; height: 360px; border: 0; border-radius: 12px; }
+
+/* --- toast --- */
+#toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translate(-50%, 20px);
+    background: var(--ink);
+    color: #fff;
+    padding: 12px 20px;
+    border-radius: 10px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s, transform 0.2s;
+    z-index: 1000;
+}
+#toast.show { opacity: 1; transform: translate(-50%, 0); }
+@media (prefers-reduced-motion: reduce) { #toast { transition: none; } }
