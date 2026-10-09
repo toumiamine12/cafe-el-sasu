@@ -85,8 +85,11 @@ export function createApp(db) {
   // --- menu & rewards -------------------------------------------------------
   app.get('/api/menu', (req, res) => res.json(q('SELECT * FROM menu_items WHERE active = 1 ORDER BY category, name').all()));
 
+  // Birthday reward: Gold only, on the birthday, once per year (a cancelled order gives it back).
+  const usedThisYear = (u, r) => !!q(`SELECT 1 FROM orders WHERE user_id = ? AND reward_id = ? AND status != 'cancelled'
+    AND created_at >= ?`).get(u.id, r.id, `${new Date().getUTCFullYear()}-01-01`);
   const rewardsFor = (u) => q('SELECT * FROM rewards ORDER BY cost_points').all()
-    .filter((r) => !r.birthday_only || (tierFor(u.lifetime_points).name === 'Gold' && isBirthday(u)));
+    .filter((r) => !r.birthday_only || (tierFor(u.lifetime_points).name === 'Gold' && isBirthday(u) && !usedThisYear(u, r)));
 
   app.get('/api/rewards', loggedIn, (req, res) => res.json(rewardsFor(req.user)));
 

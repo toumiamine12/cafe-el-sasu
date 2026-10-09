@@ -69,9 +69,14 @@ async function loadStaff() {
 }
 
 $('clock').addEventListener('click', async () => {
-  const { open } = await api('/api/admin/shifts/clock', { method: 'POST' });
-  toast(open ? 'Eingestempelt – schönen Dienst!' : 'Ausgestempelt');
-  loadStaff();
+  if ($('clock').disabled) return;
+  $('clock').disabled = true; // a double-click would clock in and straight back out
+  try {
+    const { open } = await api('/api/admin/shifts/clock', { method: 'POST' });
+    toast(open ? 'Eingestempelt – schönen Dienst!' : 'Ausgestempelt');
+    await loadStaff();
+  } catch (err) { toast(err.message); }
+  $('clock').disabled = false;
 });
 
 // --- finance ------------------------------------------------------------------

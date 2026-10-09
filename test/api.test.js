@@ -248,3 +248,19 @@ test('pickup slots are all valid and 15 minutes apart', async () => {
 test('walk-in account cannot log in', async () => {
   assert.equal((await client()('POST', '/api/login', { id: 'gast@cafe-elsasu.de', password: 'x' })).status, 401);
 });
+
+test('birthday coffee can be redeemed once per year', async () => {
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Berlin' }).format(new Date());
+  db.prepare("UPDATE users SET birthday = ? WHERE member_id = 'SASU-1005'").run('1995' + today.slice(4));
+  const c = await login('SASU-1005', 'demo123'); // Gold
+  const bday = db.prepare('SELECT id FROM rewards WHERE birthday_only = 1').get();
+  assert.ok((await c('GET', '/api/rewards')).body.some((r) => r.id === bday.id));
+  const body = { items: [{ id: itemByName('Espresso').id, qty: 1 }], pickup_at: nextOpen(), reward_id: bday.id };
+  const first = await c('POST', '/api/orders', body);
+  assert.equal(first.status, 201);
+  assert.equal(first.body.total_cents, 0);
+  assert.equal((await c('POST', '/api/orders', body)).status, 400);
+  assert.ok(!(await c('GET', '/api/rewards')).body.some((r) => r.id === bday.id));
+  await c('POST', `/api/orders/${first.body.id}/cancel`);
+  assert.ok((await c('GET', '/api/rewards')).body.some((r) => r.id === bday.id), 'cancel gives it back');
+});
