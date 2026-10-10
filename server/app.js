@@ -112,7 +112,7 @@ export function createApp(db) {
     const token = /(?:^|;\s*)sid=([a-f0-9]{64})/.exec(req.headers.cookie || '')?.[1];
     if (token) {
       req.user = q(`SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id
-                    WHERE s.token = ? AND s.expires_at > ?`).get(token, Date.now());
+                    WHERE s.token = ? AND s.expires_at > ? AND u.active = 1`).get(token, Date.now());
       req.token = token;
     }
     next();
@@ -132,6 +132,8 @@ export function createApp(db) {
   const loggedIn = requireRole();
   const customer = requireRole('customer'); // ordering, rewards and the member card are for guests, not staff
 
+  const nextMemberId = () => `SASU-${q("SELECT COALESCE(MAX(CAST(SUBSTR(member_id, 6) AS INTEGER)), 999) + 1 n FROM users").get().n}`;
+
   // --- auth -----------------------------------------------------------------
   app.post('/api/register', (req, res) => {
     const { name, email, password, birthday } = req.body;
@@ -141,9 +143,8 @@ export function createApp(db) {
     if (birthday) checkBirthday(birthday);
     if (q('SELECT 1 FROM users WHERE email = ?').get(email)) fail(409, 'E-Mail ist bereits registriert');
     const user = tx(db, () => {
-      const n = q("SELECT COALESCE(MAX(CAST(SUBSTR(member_id, 6) AS INTEGER)), 999) + 1 n FROM users").get().n;
       const { lastInsertRowid } = q('INSERT INTO users (member_id, name, email, password_hash, birthday) VALUES (?, ?, ?, ?, ?)')
-        .run(`SASU-${n}`, name.trim(), email.trim(), hashPassword(password), birthday || null);
+        .run(nextMemberId(), name.trim(), email.trim(), hashPassword(password), birthday || null);
       return q('SELECT * FROM users WHERE id = ?').get(lastInsertRowid);
     });
     startSession(res, user.id);
@@ -159,6 +160,7 @@ export function createApp(db) {
       limiter.fail(keys);
       fail(401, 'Mitgliedsnummer/E-Mail oder Passwort falsch');
     }
+    if (!user.active) fail(403, 'Dieses Konto ist deaktiviert. Bitte wende dich an die Inhaberin.');
     limiter.reset(keys[1][0]);
     startSession(res, user.id);
     res.json(publicUser(user));
@@ -205,7 +207,7 @@ export function createApp(db) {
     const { current, next } = req.body;
     if (typeof current !== 'string' || !verifyPassword(current, req.user.password_hash)) fail(401, 'Aktuelles Passwort ist falsch');
     checkPassword(next);
-    q('UPDATE users SET password_hash = ? WHERE id = ?').run(hashPassword(next), req.user.id);
+    q('UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?').run(hashPassword(next), req.user.id);
     // Sign out other devices, keep this one.
     q('DELETE FROM sessions WHERE user_id = ? AND token != ?').run(req.user.id, req.token);
     res.json({ ok: true });
@@ -486,6 +488,76 @@ export function createApp(db) {
     const r = q(`UPDATE menu_items SET ${fields.map(([k]) => `${k} = ?`)} WHERE id = ?`).run(...fields.map(([, v]) => v), Number(req.params.id));
     if (!r.changes) fail(404, 'Artikel nicht gefunden');
     res.json(q('SELECT * FROM menu_items WHERE id = ?').get(Number(req.params.id)));
+  });
+
+  // --- staff management (Mitarbeiterverwaltung) ---------------------------------
+  const staffRow = ({ password_hash, points, lifetime_points, birthday, ...u }) => ({
+    ...u, on_shift: !!q('SELECT 1 FROM shifts WHERE user_id = ? AND clock_out IS NULL').get(u.id),
+  });
+  const checkWage = (v) => { if (!Number.isInteger(v) || v < 0 || v > 20000) fail(400, 'Stundenlohn in Cent, 0 bis 200 €'); };
+
+  app.get('/api/admin/staff', admin, (req, res) =>
+    res.json(q("SELECT * FROM users WHERE role IN ('staff','admin') ORDER BY active DESC, name").all().map(staffRow)));
+
+  // New staff get a temporary password and must choose their own at first login.
+  app.post('/api/admin/staff', admin, (req, res) => {
+    const { name, email, password, hourly_wage } = req.body;
+    checkName(name);
+    checkEmail(email);
+    checkPassword(password);
+    checkWage(hourly_wage);
+    if (q('SELECT 1 FROM users WHERE email = ?').get(email)) fail(409, 'E-Mail ist bereits registriert');
+    const user = tx(db, () => {
+      const { lastInsertRowid } = q(`INSERT INTO users (member_id, name, email, password_hash, role, hourly_wage, must_change_password)
+        VALUES (?, ?, ?, ?, 'staff', ?, 1)`).run(nextMemberId(), name.trim(), email.trim(), hashPassword(password), hourly_wage);
+      return q('SELECT * FROM users WHERE id = ?').get(lastInsertRowid);
+    });
+    res.status(201).json(staffRow(user));
+  });
+
+  app.patch('/api/admin/staff/:id', admin, (req, res) => {
+    const id = Number(req.params.id);
+    const fields = Object.keys(req.body);
+    if (!fields.length || fields.some((k) => !['hourly_wage', 'active'].includes(k))) fail(400, 'Nur Stundenlohn und Aktiv sind änderbar');
+    if ('hourly_wage' in req.body) checkWage(req.body.hourly_wage);
+    if ('active' in req.body && ![0, 1].includes(req.body.active)) fail(400, 'active muss 0 oder 1 sein');
+    if (id === req.user.id && req.body.active === 0) fail(400, 'Du kannst dein eigenes Konto nicht deaktivieren');
+    const updated = tx(db, () => {
+      const u = q("SELECT * FROM users WHERE id = ? AND role IN ('staff','admin')").get(id);
+      if (!u) fail(404, 'Mitarbeiter nicht gefunden');
+      if ('hourly_wage' in req.body) q('UPDATE users SET hourly_wage = ? WHERE id = ?').run(req.body.hourly_wage, id);
+      if ('active' in req.body) {
+        q('UPDATE users SET active = ? WHERE id = ?').run(req.body.active, id);
+        if (req.body.active === 0) { // off the team: sign out everywhere and end a running shift
+          q('DELETE FROM sessions WHERE user_id = ?').run(id);
+          q('UPDATE shifts SET clock_out = ? WHERE user_id = ? AND clock_out IS NULL').run(new Date().toISOString(), id);
+        }
+      }
+      return q('SELECT * FROM users WHERE id = ?').get(id);
+    });
+    res.json(staffRow(updated));
+  });
+
+  // Every shift in the range with hours and cost (open shifts count up to now), plus totals per person.
+  app.get('/api/admin/shifts/list', admin, (req, res) => {
+    const days = RANGES[req.query.range];
+    if (!days) fail(400, 'range muss day, week oder month sein');
+    const now = Date.now();
+    const shifts = q(`SELECT s.id, s.user_id, u.name, u.member_id, u.hourly_wage, s.clock_in, s.clock_out
+      FROM shifts s JOIN users u ON u.id = s.user_id WHERE s.clock_in >= ? ORDER BY s.clock_in DESC`).all(sinceDays(days))
+      .map((s) => {
+        const hours = Math.round(((s.clock_out ? Date.parse(s.clock_out) : now) - Date.parse(s.clock_in)) / 36e3) / 100;
+        return { ...s, hours, cost_cents: Math.round(hours * s.hourly_wage) };
+      });
+    const totals = [...new Set(shifts.map((s) => s.user_id))].map((uid) => {
+      const mine = shifts.filter((s) => s.user_id === uid);
+      return {
+        user_id: uid, name: mine[0].name, shifts: mine.length,
+        hours: Math.round(mine.reduce((a, s) => a + s.hours, 0) * 100) / 100,
+        cost_cents: mine.reduce((a, s) => a + s.cost_cents, 0),
+      };
+    });
+    res.json({ shifts, totals });
   });
 
   // --- errors ---------------------------------------------------------------

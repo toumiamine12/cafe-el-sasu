@@ -567,3 +567,70 @@ test('photos may come from https sites', async () => {
   const csp = (await fetch(base + '/')).headers.get('content-security-policy');
   assert.match(csp, /img-src 'self' data: https:/);
 });
+
+// --- staff management --------------------------------------------------------------
+
+test('admin creates a staff account with a temporary password', async () => {
+  const admin = await login('SASU-1000', 'admin123');
+  const lena = await login('SASU-1001', 'staff123');
+  const body = { name: 'Mia Krüger', email: 'mia@cafe-elsasu.de', password: 'Willkommen1', hourly_wage: 1450 };
+  assert.equal((await lena('POST', '/api/admin/staff', body)).status, 403);
+  for (const bad of [{ ...body, password: 'kurz' }, { ...body, hourly_wage: -1 }, { ...body, hourly_wage: 12.5 }, { ...body, email: 'x' }]) {
+    assert.equal((await admin('POST', '/api/admin/staff', bad)).status, 400, JSON.stringify(bad));
+  }
+  const r = await admin('POST', '/api/admin/staff', body);
+  assert.equal(r.status, 201);
+  assert.match(r.body.member_id, /^SASU-\d+$/);
+  assert.equal(r.body.role, 'staff');
+  assert.equal(r.body.password_hash, undefined);
+  assert.equal((await admin('POST', '/api/admin/staff', body)).status, 409);
+  assert.ok((await admin('GET', '/api/admin/staff')).body.some((u) => u.email === 'mia@cafe-elsasu.de' && u.hourly_wage === 1450));
+});
+
+test('a temporary password must be changed at first login', async () => {
+  const mia = await login('mia@cafe-elsasu.de', 'Willkommen1');
+  assert.equal((await mia('GET', '/api/me')).body.must_change_password, 1);
+  assert.equal((await mia('POST', '/api/me/password', { current: 'Willkommen1', next: 'MeinEigenes99' })).status, 200);
+  assert.equal((await mia('GET', '/api/me')).body.must_change_password, 0);
+});
+
+test('admin changes wages and deactivates staff', async () => {
+  const admin = await login('SASU-1000', 'admin123');
+  const mia = await login('mia@cafe-elsasu.de', 'MeinEigenes99');
+  const id = db.prepare("SELECT id FROM users WHERE email = 'mia@cafe-elsasu.de'").get().id;
+  await mia('POST', '/api/admin/shifts/clock'); // on shift
+  assert.equal((await admin('PATCH', `/api/admin/staff/${id}`, { hourly_wage: 1650 })).body.hourly_wage, 1650);
+  const off = await admin('PATCH', `/api/admin/staff/${id}`, { active: 0 });
+  assert.equal(off.body.active, 0);
+  assert.equal((await mia('GET', '/api/me')).body, null, 'sessions ended');
+  assert.ok(db.prepare('SELECT clock_out FROM shifts WHERE user_id = ? ORDER BY id DESC').get(id).clock_out, 'open shift closed');
+  const blocked = await client()('POST', '/api/login', { id: 'mia@cafe-elsasu.de', password: 'MeinEigenes99' });
+  assert.equal(blocked.status, 403);
+  assert.match(blocked.body.error, /deaktiviert/);
+  await admin('PATCH', `/api/admin/staff/${id}`, { active: 1 });
+  await login('mia@cafe-elsasu.de', 'MeinEigenes99');
+});
+
+test('staff edits are limited to staff accounts, never yourself', async () => {
+  const admin = await login('SASU-1000', 'admin123');
+  const self = db.prepare("SELECT id FROM users WHERE member_id = 'SASU-1000'").get().id;
+  const guest = db.prepare("SELECT id FROM users WHERE member_id = 'SASU-1003'").get().id;
+  assert.equal((await admin('PATCH', `/api/admin/staff/${self}`, { active: 0 })).status, 400);
+  assert.equal((await admin('PATCH', `/api/admin/staff/${guest}`, { hourly_wage: 1 })).status, 404);
+  assert.equal((await admin('PATCH', `/api/admin/staff/${guest}`, { role: 'admin' })).status, 400);
+});
+
+test('shift list shows hours and cost per shift and per person', async () => {
+  const admin = await login('SASU-1000', 'admin123');
+  const lena = await login('SASU-1001', 'staff123');
+  assert.equal((await lena('GET', '/api/admin/shifts/list?range=week')).status, 403);
+  assert.equal((await admin('GET', '/api/admin/shifts/list?range=year')).status, 400);
+  const r = (await admin('GET', '/api/admin/shifts/list?range=month')).body;
+  const done = r.shifts.find((s) => s.clock_out && s.name === 'Lena Becker');
+  assert.ok(done);
+  assert.equal(done.hours, 8);
+  assert.equal(done.cost_cents, 8 * 1400);
+  const lenaTotal = r.totals.find((t) => t.name === 'Lena Becker');
+  const sum = r.shifts.filter((s) => s.name === 'Lena Becker').reduce((a, s) => a + s.cost_cents, 0);
+  assert.equal(lenaTotal.cost_cents, sum);
+});
