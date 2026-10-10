@@ -2,14 +2,8 @@
 const $ = (id) => document.getElementById(id);
 const fmtTime = new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', hour: '2-digit', minute: '2-digit' });
 const fmtDay = new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', weekday: 'short' });
-const berlinDay = () => new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Berlin' })).getDay();
 const sameBerlinDay = (a, b) => a.toLocaleDateString('de-DE', { timeZone: 'Europe/Berlin' }) === b.toLocaleDateString('de-DE', { timeZone: 'Europe/Berlin' });
 const at = (d) => `${sameBerlinDay(d, new Date()) ? 'heute' : fmtDay.format(d)} ${fmtTime.format(d)} Uhr`;
-
-// Highlight today's row in the hours table.
-document.querySelectorAll('#hours tr').forEach((tr) => {
-  if (tr.dataset.days.split(',').map(Number).includes(berlinDay())) tr.classList.add('today');
-});
 
 api('/api/status').then((s) => {
   const change = s.changes_at && new Date(s.changes_at);

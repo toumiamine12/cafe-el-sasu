@@ -54,6 +54,12 @@ function toast(msg) {
   t.timer = setTimeout(() => t.classList.remove('show'), 2500);
 }
 
+// Mark today's opening hours (Berlin time) wherever they're listed.
+const berlinWeekday = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Berlin' })).getDay();
+document.querySelectorAll('[data-days]').forEach((el) => {
+  if (el.dataset.days.split(',').map(Number).includes(berlinWeekday)) el.classList.add('today');
+});
+
 // --- nav: active page, cart, account, scroll + phone menu ---------------------
 const me = api('/api/me').catch(() => null);  // null when logged out
 
