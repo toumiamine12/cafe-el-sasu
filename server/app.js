@@ -3,7 +3,7 @@ import QRCode from 'qrcode';
 import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { hashPassword, verifyPassword, tx } from './db.js';
-import { tierFor, isOpenAt, validatePickup, priceOrder, pointsFor, nextChange, validateModifiers } from './rules.js';
+import { tierFor, isOpenAt, validatePickup, priceOrder, pointsFor, nextChange, validateModifiers, slotStart, SLOT_CAPACITY } from './rules.js';
 
 const SESSION_DAYS = 30;
 const PUBLIC = fileURLToPath(new URL('../public', import.meta.url));
@@ -97,6 +97,14 @@ export function createApp(db) {
   app.use(express.static(PUBLIC));
 
   const q = (sql) => db.prepare(sql);
+  const setting = (key) => q('SELECT value FROM settings WHERE key = ?').get(key)?.value;
+  const capacity = () => Number(setting('slot_capacity')) || SLOT_CAPACITY;
+  // Non-cancelled orders already booked into the 15-minute window that contains `date`.
+  const bookedIn = (date) => {
+    const from = slotStart(date);
+    return q(`SELECT COUNT(*) n FROM orders WHERE status != 'cancelled' AND pickup_at >= ? AND pickup_at < ?`)
+      .get(from.toISOString(), new Date(from.getTime() + 900e3).toISOString()).n;
+  };
 
   // --- sessions -------------------------------------------------------------
   app.use((req, res, next) => {
@@ -241,6 +249,19 @@ export function createApp(db) {
     res.json(slots);
   });
 
+  // Checkout: every valid slot in the next 3 days with how many places are left ("Ausgebucht" when 0).
+  app.get('/api/pickup-availability', (req, res) => {
+    const cap = capacity();
+    const slots = [];
+    const t = new Date(Math.ceil(Date.now() / 900e3) * 900e3);
+    for (const end = Date.now() + 3 * 864e5; t < end && slots.length < 300; t.setTime(t.getTime() + 900e3)) {
+      if (validatePickup(t)) continue;
+      const left = Math.max(0, cap - bookedIn(t));
+      slots.push({ at: t.toISOString(), full: left === 0, left });
+    }
+    res.json(slots);
+  });
+
   // Home page: open right now? when does that change? earliest pickup?
   app.get('/api/status', (req, res) => {
     const now = new Date();
@@ -286,6 +307,8 @@ export function createApp(db) {
     if (err) fail(400, err);
 
     const order = tx(db, () => {
+      // Counted inside the write transaction, so two guests can't both take the last place.
+      if (bookedIn(pickup) >= capacity()) fail(409, 'Dieses Abholfenster ist ausgebucht. Bitte wähle eine andere Zeit.');
       const user = q('SELECT * FROM users WHERE id = ?').get(req.user.id);
       let reward = null;
       if (reward_id != null) {

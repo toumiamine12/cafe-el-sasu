@@ -26,9 +26,10 @@ export function isOpenAt(date) {
   return !!range && min >= range[0] && min < range[1];
 }
 
-export function validatePickup(pickupAt, now = new Date()) {
+// leadMinutes: 15 normally, 30 when staff switch on the rush delay.
+export function validatePickup(pickupAt, now = new Date(), leadMinutes = 15) {
   if (isNaN(pickupAt)) return 'Ungültige Abholzeit';
-  if (pickupAt - now < 15 * 60e3) return 'Abholung frühestens in 15 Minuten';
+  if (pickupAt - now < leadMinutes * 60e3) return `Abholung frühestens in ${leadMinutes} Minuten`;
   if (!isOpenAt(pickupAt)) return 'Zu dieser Zeit haben wir geschlossen';
   return null;
 }
@@ -82,3 +83,7 @@ export function validateModifiers(groups, optionIds) {
   }
   return chosen;
 }
+
+// Pickup capacity: at most this many orders per 15-minute window (the settings table can override it).
+export const SLOT_CAPACITY = 5;
+export const slotStart = (date) => new Date(Math.floor(date.getTime() / 900e3) * 900e3);

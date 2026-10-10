@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { tierFor, isOpenAt, validatePickup, priceOrder, pointsFor, nextChange, validateModifiers } from '../server/rules.js';
+import { tierFor, isOpenAt, validatePickup, priceOrder, pointsFor, nextChange, validateModifiers, slotStart, SLOT_CAPACITY } from '../server/rules.js';
 
 // Berlin is UTC+2 in summer: 2026-07-07 is a Tuesday.
 const berlin = (iso) => new Date(iso + '+02:00');
@@ -104,4 +104,22 @@ test('priceOrder adds modifier prices per unit', () => {
 test('a reward frees the base price, modifiers are still charged', () => {
   const lines = [{ price_cents: 459, qty: 1, category: 'coffee', mods: [{ price_cents: 50 }] }];
   assert.deepEqual(priceOrder(lines, { category_allowed: 'coffee' }, 0), { subtotal: 509, discount: 459, total: 50 });
+});
+
+// --- pickup capacity -------------------------------------------------------------
+test('slotStart rounds down to the 15-minute window', () => {
+  assert.equal(slotStart(berlin('2026-07-07T12:07')).getTime(), berlin('2026-07-07T12:00').getTime());
+  assert.equal(slotStart(berlin('2026-07-07T12:15')).getTime(), berlin('2026-07-07T12:15').getTime());
+  assert.equal(slotStart(berlin('2026-07-07T12:29:59')).getTime(), berlin('2026-07-07T12:15').getTime());
+});
+
+test('default slot capacity is 5 orders', () => {
+  assert.equal(SLOT_CAPACITY, 5);
+});
+
+test('validatePickup honours a longer lead time', () => {
+  const now = berlin('2026-07-07T12:00');
+  assert.equal(validatePickup(new Date(now.getTime() + 20 * 60e3), now), null);
+  assert.ok(validatePickup(new Date(now.getTime() + 20 * 60e3), now, 30));
+  assert.equal(validatePickup(new Date(now.getTime() + 30 * 60e3), now, 30), null);
 });

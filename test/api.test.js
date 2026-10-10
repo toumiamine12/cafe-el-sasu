@@ -7,6 +7,8 @@ import { validatePickup } from '../server/rules.js';
 // Staff/admin passwords come from the environment now; tests pin known values.
 process.env.ADMIN_PASSWORD = 'admin123';
 process.env.STAFF_PASSWORD = 'staff123';
+// Many tests order for the same pickup slot; the capacity test lowers this on purpose.
+process.env.SLOT_CAPACITY = '1000';
 
 let server, base, db;
 before(async () => {
@@ -456,4 +458,51 @@ test('free coffee reward still charges the oat milk', async () => {
   const r = await c('POST', '/api/orders', { items: [{ id: flat.id, qty: 1, mods: [optionId(flat, 'Hafermilch')] }], pickup_at: nextOpen(), reward_id: coffee.id });
   assert.equal(r.status, 201);
   assert.equal(r.body.total_cents, 50 - Math.floor(50 * 0.10));
+});
+
+// --- pickup capacity -----------------------------------------------------------------
+
+// A pickup window far from the others (3rd open slot after tomorrow) so earlier tests don't fill it.
+function quietSlot() {
+  const t = new Date(nextOpen());
+  t.setTime(t.getTime() + 2 * 3600e3);
+  while (validatePickup(t)) t.setTime(t.getTime() + 900e3);
+  return t.toISOString();
+}
+
+test('a pickup window takes only slot_capacity orders', async () => {
+  db.prepare("UPDATE settings SET value = '2' WHERE key = 'slot_capacity'").run();
+  try {
+    const c = await login('SASU-1003', 'demo123');
+    const at = quietSlot();
+    const order = () => c('POST', '/api/orders', { items: [{ id: itemByName('Croissant').id, qty: 6 }], pickup_at: at });
+    assert.equal((await order()).status, 201);
+    const second = await order();
+    assert.equal(second.status, 201);
+    const third = await order();
+    assert.equal(third.status, 409);
+    assert.match(third.body.error, /ausgebucht/);
+    // cancelling frees the place again
+    await c('POST', `/api/orders/${second.body.id}/cancel`);
+    assert.equal((await order()).status, 201);
+  } finally {
+    db.prepare("UPDATE settings SET value = '1000' WHERE key = 'slot_capacity'").run();
+  }
+});
+
+test('availability marks full windows', async () => {
+  db.prepare("UPDATE settings SET value = '1' WHERE key = 'slot_capacity'").run();
+  try {
+    const list = (await client()('GET', '/api/pickup-availability')).body;
+    assert.ok(list.length > 0);
+    for (const s of list) assert.equal(validatePickup(new Date(s.at)), null);
+    const taken = db.prepare("SELECT pickup_at FROM orders WHERE status IN ('new','preparing','ready') ORDER BY pickup_at LIMIT 1").get();
+    const slot = list.find((s) => s.at === taken.pickup_at);
+    assert.ok(slot, 'an existing order sits in a listed slot');
+    assert.equal(slot.full, true);
+    assert.equal(slot.left, 0);
+    assert.ok(list.some((s) => !s.full && s.left === 1));
+  } finally {
+    db.prepare("UPDATE settings SET value = '1000' WHERE key = 'slot_capacity'").run();
+  }
 });

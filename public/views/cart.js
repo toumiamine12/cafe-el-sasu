@@ -71,10 +71,14 @@ export default {
       $('order-form').innerHTML = '<p>Bitte <a href="#/login?next=%23%2Fwarenkorb">einloggen oder registrieren</a>, um vorzubestellen und Punkte zu sammeln.</p>';
       return;
     }
-    const [slots, rewards] = await Promise.all([api('/api/pickup-slots'), api('/api/rewards')]);
+    const [slots, rewards] = await Promise.all([api('/api/pickup-availability'), api('/api/rewards')]);
     if (!alive()) return;
-    $('pickup').innerHTML = slots.map((s) => `<option value="${s}">${fmtSlot.format(new Date(s))} Uhr</option>`).join('')
+    // Full 15-minute windows stay visible but can't be picked.
+    $('pickup').innerHTML = slots.map((s) => `<option value="${s.at}" ${s.full ? 'disabled' : ''}>${fmtSlot.format(new Date(s.at))} Uhr${s.full ? ' – Ausgebucht' : s.left <= 2 ? ` – noch ${s.left} frei` : ''}</option>`).join('')
       || '<option value="">Gerade keine Abholzeit verfügbar</option>';
+    const firstFree = slots.find((s) => !s.full);
+    if (firstFree) $('pickup').value = firstFree.at;
+    else $('place').disabled = true;
     $('reward').innerHTML += rewards.filter((r) => r.cost_points <= user.points)
       .map((r) => `<option value="${r.id}">${esc(r.name)} (${r.cost_points} Punkte)</option>`).join('');
     $('discount-note').textContent = user.tier.discountPct
