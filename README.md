@@ -99,6 +99,16 @@ Browser (vanilla ES modules, hash router)          Server (Node 22 + Express)
 - The strict Content-Security-Policy allows only the site's own scripts. Responses also send `X-Frame-Options: DENY`, `nosniff` and a strict referrer policy.
 - All SQL is parameterised and all user text is escaped before rendering. CSV exports guard against formula injection.
 
+## Testing
+
+122 automated tests run with Node's built-in test runner (`node:test`), with no test framework to install:
+
+- **`test/rules.test.js`** covers the pure business rules: pricing with options and rewards, tiers, opening hours and pickup validation (including daylight-saving days), break rules, VAT split and business insights.
+- **`test/api.test.js`** sends real HTTP requests against the Express app with an in-memory database. It covers registration and login, role checks, CSRF protection, ordering and capacity, loyalty, gifts, bean subscriptions, staff shifts, payroll and the analytics and CSV report.
+- **`test/db.test.js`** checks password hashing, the random staff and admin passwords used when no environment variables are set, the schema migrations on an existing database, and the integrity of the demo data.
+
+[GitHub Actions](https://github.com/toumiamine12/cafe-el-sasu/actions/workflows/test.yml) runs the full suite on every push to `main` and on every pull request.
+
 ## Getting started
 
 Requires **Node.js 22.13+**.
@@ -146,6 +156,7 @@ public/app.js          shared helpers: API client, session, cart, navbar
 public/views/          one module per view (menu, cart, account, admin, finance, …)
 public/shop.css        all styles
 test/                  node:test suites (rules, API, database)
+.github/workflows/      CI: runs the tests on every push
 ```
 
 ## Credits
