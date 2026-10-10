@@ -634,3 +634,69 @@ test('shift list shows hours and cost per shift and per person', async () => {
   const sum = r.shifts.filter((s) => s.name === 'Lena Becker').reduce((a, s) => a + s.cost_cents, 0);
   assert.equal(lenaTotal.cost_cents, sum);
 });
+
+// --- kitchen display: rush controls & member lookup ---------------------------------
+
+test('staff read and switch rush settings; capacity is admin-only', async () => {
+  const lena = await login('SASU-1001', 'staff123');
+  const admin = await login('SASU-1000', 'admin123');
+  const anna = await login('SASU-1003', 'demo123');
+  assert.equal((await anna('GET', '/api/admin/settings')).status, 403);
+  const s = (await lena('GET', '/api/admin/settings')).body;
+  assert.equal(s.orders_paused, 0);
+  assert.equal(s.extra_delay_min, 0);
+  assert.equal((await lena('PATCH', '/api/admin/settings', { extra_delay_min: 20 })).status, 400);
+  assert.equal((await lena('PATCH', '/api/admin/settings', { slot_capacity: 3 })).status, 403);
+  assert.equal((await admin('PATCH', '/api/admin/settings', { slot_capacity: 0 })).status, 400);
+  assert.equal((await admin('PATCH', '/api/admin/settings', { slot_capacity: 1000 })).body.slot_capacity, 1000);
+});
+
+test('pausing online orders stops new orders and shows on the status', async () => {
+  const lena = await login('SASU-1001', 'staff123');
+  const anna = await login('SASU-1003', 'demo123');
+  await lena('PATCH', '/api/admin/settings', { orders_paused: 1 });
+  try {
+    assert.equal((await client()('GET', '/api/status')).body.orders_paused, true);
+    const r = await anna('POST', '/api/orders', { items: [{ id: itemByName('Espresso').id, qty: 1 }], pickup_at: nextOpen() });
+    assert.equal(r.status, 503);
+    assert.match(r.body.error, /pausiert/);
+  } finally {
+    await lena('PATCH', '/api/admin/settings', { orders_paused: 0 });
+  }
+  assert.equal((await anna('POST', '/api/orders', { items: [{ id: itemByName('Espresso').id, qty: 1 }], pickup_at: nextOpen() })).status, 201);
+});
+
+test('rush delay pushes the earliest pickup to 30 minutes', async () => {
+  const lena = await login('SASU-1001', 'staff123');
+  await lena('PATCH', '/api/admin/settings', { extra_delay_min: 15 });
+  try {
+    const status = (await client()('GET', '/api/status')).body;
+    assert.equal(status.lead_minutes, 30);
+    for (const s of (await client()('GET', '/api/pickup-availability')).body) {
+      assert.equal(validatePickup(new Date(s.at), new Date(), 30), null);
+    }
+  } finally {
+    await lena('PATCH', '/api/admin/settings', { extra_delay_min: 0 });
+  }
+  assert.equal((await client()('GET', '/api/status')).body.lead_minutes, 15);
+});
+
+test('staff look up a member by QR code / member ID', async () => {
+  const lena = await login('SASU-1001', 'staff123');
+  const anna = await login('SASU-1003', 'demo123');
+  const placed = (await anna('POST', '/api/orders', { items: [{ id: itemByName('Croissant').id, qty: 1 }], pickup_at: nextOpen() })).body;
+  assert.equal((await anna('GET', '/api/admin/members/SASU-1003')).status, 403);
+  const r = await lena('GET', '/api/admin/members/sasu-1003');
+  assert.equal(r.status, 200);
+  assert.equal(r.body.name, 'Anna Schmidt');
+  assert.equal(r.body.tier.name, 'Bronze');
+  assert.equal(r.body.password_hash, undefined);
+  assert.ok(r.body.orders.some((o) => o.id === placed.id && o.items[0].name === 'Croissant'));
+  assert.ok(r.body.orders.every((o) => ['new', 'preparing', 'ready'].includes(o.status)));
+  assert.equal((await lena('GET', '/api/admin/members/SASU-1001')).status, 404); // staff aren't members
+  assert.equal((await lena('GET', '/api/admin/members/SASU-99999')).status, 404);
+});
+
+test('camera may be used by our own page for the QR scanner', async () => {
+  assert.match((await fetch(base + '/')).headers.get('permissions-policy'), /camera=\(self\)/);
+});

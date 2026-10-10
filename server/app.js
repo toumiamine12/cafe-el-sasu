@@ -72,7 +72,7 @@ export function createApp(db) {
       'X-Frame-Options': 'DENY',
       'X-Content-Type-Options': 'nosniff',
       'Referrer-Policy': 'strict-origin-when-cross-origin',
-      'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+      'Permissions-Policy': 'camera=(self), microphone=(), geolocation=()', // camera: staff QR scanner
     });
     next();
   });
@@ -100,6 +100,8 @@ export function createApp(db) {
   const q = (sql) => db.prepare(sql);
   const setting = (key) => q('SELECT value FROM settings WHERE key = ?').get(key)?.value;
   const capacity = () => Number(setting('slot_capacity')) || SLOT_CAPACITY;
+  const paused = () => setting('orders_paused') === '1';
+  const leadMinutes = () => 15 + Number(setting('extra_delay_min') || 0); // 30 while staff run the rush delay
   // Non-cancelled orders already booked into the 15-minute window that contains `date`.
   const bookedIn = (date) => {
     const from = slotStart(date);
@@ -247,7 +249,7 @@ export function createApp(db) {
     const slots = [];
     const t = new Date(Math.ceil(Date.now() / 900e3) * 900e3);
     for (const end = Date.now() + 3 * 864e5; t < end && slots.length < 60; t.setTime(t.getTime() + 900e3)) {
-      if (!validatePickup(t)) slots.push(t.toISOString());
+      if (!validatePickup(t, new Date(), leadMinutes())) slots.push(t.toISOString());
     }
     res.json(slots);
   });
@@ -258,7 +260,7 @@ export function createApp(db) {
     const slots = [];
     const t = new Date(Math.ceil(Date.now() / 900e3) * 900e3);
     for (const end = Date.now() + 3 * 864e5; t < end && slots.length < 300; t.setTime(t.getTime() + 900e3)) {
-      if (validatePickup(t)) continue;
+      if (validatePickup(t, new Date(), leadMinutes())) continue;
       const left = Math.max(0, cap - bookedIn(t));
       slots.push({ at: t.toISOString(), full: left === 0, left });
     }
@@ -268,9 +270,13 @@ export function createApp(db) {
   // Home page: open right now? when does that change? earliest pickup?
   app.get('/api/status', (req, res) => {
     const now = new Date();
-    const next = new Date(Math.ceil((now.getTime() + 15 * 60e3) / 900e3) * 900e3);
-    for (const end = now.getTime() + 7 * 864e5; validatePickup(next, now) && next < end;) next.setTime(next.getTime() + 900e3);
-    res.json({ open: isOpenAt(now), changes_at: nextChange(now)?.toISOString() ?? null, next_pickup: next.toISOString() });
+    const lead = leadMinutes();
+    const next = new Date(Math.ceil((now.getTime() + lead * 60e3) / 900e3) * 900e3);
+    for (const end = now.getTime() + 7 * 864e5; validatePickup(next, now, lead) && next < end;) next.setTime(next.getTime() + 900e3);
+    res.json({
+      open: isOpenAt(now), changes_at: nextChange(now)?.toISOString() ?? null, next_pickup: next.toISOString(),
+      orders_paused: paused(), lead_minutes: lead,
+    });
   });
 
   // Home page: best sellers of the last 7 days (padded with other items if sales are thin).
@@ -290,6 +296,7 @@ export function createApp(db) {
   };
 
   app.post('/api/orders', customer, (req, res) => {
+    if (paused()) fail(503, 'Online-Bestellungen sind gerade pausiert. Bitte versuch es gleich noch einmal.');
     const { items, pickup_at, reward_id } = req.body;
     if (!Array.isArray(items) || !items.length || items.length > 30) fail(400, 'Warenkorb ist leer');
     const menu = q('SELECT * FROM menu_items WHERE id = ? AND active = 1');
@@ -307,7 +314,7 @@ export function createApp(db) {
       }
     });
     const pickup = new Date(pickup_at);
-    const err = validatePickup(pickup);
+    const err = validatePickup(pickup, new Date(), leadMinutes());
     if (err) fail(400, err);
 
     const order = tx(db, () => {
@@ -488,6 +495,38 @@ export function createApp(db) {
     const r = q(`UPDATE menu_items SET ${fields.map(([k]) => `${k} = ?`)} WHERE id = ?`).run(...fields.map(([, v]) => v), Number(req.params.id));
     if (!r.changes) fail(404, 'Artikel nicht gefunden');
     res.json(q('SELECT * FROM menu_items WHERE id = ?').get(Number(req.params.id)));
+  });
+
+  // --- kitchen display: rush controls & member lookup ------------------------------
+  const settingsView = () => ({
+    orders_paused: Number(setting('orders_paused')), extra_delay_min: Number(setting('extra_delay_min')), slot_capacity: capacity(),
+  });
+  const SETTING_RULES = {
+    orders_paused: { ok: (v) => v === 0 || v === 1, role: 'staff' },
+    extra_delay_min: { ok: (v) => v === 0 || v === 15, role: 'staff' },
+    slot_capacity: { ok: (v) => Number.isInteger(v) && v >= 1 && v <= 1000, role: 'admin' },
+  };
+
+  app.get('/api/admin/settings', staff, (req, res) => res.json(settingsView()));
+
+  // Staff switch the rush controls during service; only the owner changes slot capacity.
+  app.patch('/api/admin/settings', staff, (req, res) => {
+    const entries = Object.entries(req.body);
+    if (!entries.length || entries.some(([k]) => !Object.hasOwn(SETTING_RULES, k))) fail(400, 'Unbekannte Einstellung');
+    for (const [k, v] of entries) {
+      if (SETTING_RULES[k].role === 'admin' && req.user.role !== 'admin') fail(403, 'Nur die Inhaberin kann das ändern');
+      if (!SETTING_RULES[k].ok(v)) fail(400, `Ungültiger Wert für ${k}`);
+    }
+    tx(db, () => { for (const [k, v] of entries) q('UPDATE settings SET value = ? WHERE key = ?').run(String(v), k); });
+    res.json(settingsView());
+  });
+
+  // Barista scans the member card QR (or types the ID): who is it, and what are they picking up?
+  app.get('/api/admin/members/:memberId', staff, (req, res) => {
+    const u = q("SELECT * FROM users WHERE member_id = ? AND role = 'customer'").get(String(req.params.memberId).trim().toUpperCase());
+    if (!u) fail(404, 'Kein Mitglied mit dieser Nummer');
+    const orders = withItems(q(`SELECT * FROM orders WHERE user_id = ? AND status IN ('new','preparing','ready') ORDER BY pickup_at`).all(u.id));
+    res.json({ id: u.id, name: u.name, member_id: u.member_id, points: u.points, tier: tierFor(u.lifetime_points), orders });
   });
 
   // --- staff management (Mitarbeiterverwaltung) ---------------------------------
