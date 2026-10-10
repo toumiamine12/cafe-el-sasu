@@ -6,7 +6,7 @@
 ![Express](https://img.shields.io/badge/Express-4-000000?logo=express&logoColor=white)
 ![SQLite](https://img.shields.io/badge/SQLite-node%3Asqlite-003B57?logo=sqlite&logoColor=white)
 ![Vanilla JS](https://img.shields.io/badge/Frontend-Vanilla%20JS-F7DF1E?logo=javascript&logoColor=black)
-![Tests](https://img.shields.io/badge/tests-122%20passing-2f6b26)
+[![Tests](https://github.com/toumiamine12/cafe-el-sasu/actions/workflows/test.yml/badge.svg)](https://github.com/toumiamine12/cafe-el-sasu/actions/workflows/test.yml)
 ![Dependencies](https://img.shields.io/badge/runtime%20deps-2-informational)
 
 ![Startseite](docs/screenshots/home.png)
