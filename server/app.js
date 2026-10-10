@@ -3,7 +3,8 @@ import QRCode from 'qrcode';
 import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { hashPassword, verifyPassword, tx } from './db.js';
-import { tierFor, isOpenAt, validatePickup, priceOrder, pointsFor, nextChange, validateModifiers, slotStart, SLOT_CAPACITY, netMinutes, breakShortfall, payCents } from './rules.js';
+import { tierFor, isOpenAt, validatePickup, priceOrder, pointsFor, nextChange, validateModifiers, slotStart, SLOT_CAPACITY, netMinutes, breakShortfall, payCents,
+  inBirthdayWeek, usualCombo, usualTime, BEAN_PRICES, addWeeks } from './rules.js';
 
 const SESSION_DAYS = 30;
 const PUBLIC = fileURLToPath(new URL('../public', import.meta.url));
@@ -13,7 +14,11 @@ class HttpError extends Error {
 }
 const fail = (status, message) => { throw new HttpError(status, message); };
 
-const publicUser = ({ password_hash, ...u }) => ({ ...u, tier: tierFor(u.lifetime_points) });
+const berlinToday = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Berlin' });
+const parsePrefs = (p) => ({ milk: null, vegan_only: false, ...JSON.parse(p || '{}') });
+const publicUser = ({ password_hash, ...u }) => ({
+  ...u, preferences: parsePrefs(u.preferences), tier: tierFor(u.lifetime_points), birthday_week: inBirthdayWeek(u.birthday, berlinToday()),
+});
 
 // Field checks shared by register and profile edit.
 const checkName = (v) => { if (typeof v !== 'string' || !v.trim() || v.length > 80) fail(400, 'Name fehlt'); };
@@ -24,8 +29,6 @@ const checkBirthday = (v) => {
   if (!ok) fail(400, 'Ungültiges Geburtsdatum');
 };
 
-const berlinDay = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Berlin', month: '2-digit', day: '2-digit' });
-const isBirthday = (u) => !!u.birthday && u.birthday.slice(5) === berlinDay.format(new Date());
 
 // Content-Security-Policy: only our own scripts run; fonts, the Bootstrap CSS and the Maps embed are the only outside sources.
 const CSP = [
@@ -187,14 +190,21 @@ export function createApp(db) {
   // 200 + null when logged out, so pages can check login without a console error.
   app.get('/api/me', (req, res) => res.json(req.user ? withStats(req.user) : null));
 
-  const PROFILE_FIELDS = { name: checkName, email: checkEmail, birthday: (v) => v === null || checkBirthday(v) };
+  // Preferences: { milk: a Milch option name or null, vegan_only: boolean } — both keys, nothing else.
+  const checkPrefs = (v) => {
+    const ok = v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).sort().join() === 'milk,vegan_only'
+      && typeof v.vegan_only === 'boolean'
+      && (v.milk === null || !!q(`SELECT 1 FROM modifier_options o JOIN modifier_groups g ON g.id = o.group_id WHERE g.name = 'Milch' AND o.name = ?`).get(v.milk));
+    if (!ok) fail(400, 'Ungültige Vorlieben');
+  };
+  const PROFILE_FIELDS = { name: checkName, email: checkEmail, birthday: (v) => v === null || checkBirthday(v), preferences: checkPrefs };
   app.patch('/api/me', loggedIn, (req, res) => {
     const fields = Object.entries(req.body);
     if (!fields.length || fields.some(([k]) => !Object.hasOwn(PROFILE_FIELDS, k))) fail(400, 'Nur Name, E-Mail und Geburtstag sind änderbar');
     for (const [k, v] of fields) PROFILE_FIELDS[k](v);
     const email = req.body.email?.trim();
     if (email && q('SELECT 1 FROM users WHERE email = ? AND id != ?').get(email, req.user.id)) fail(409, 'E-Mail ist bereits registriert');
-    const values = fields.map(([k, v]) => (typeof v === 'string' ? v.trim() : v));
+    const values = fields.map(([k, v]) => (k === 'preferences' ? JSON.stringify(v) : typeof v === 'string' ? v.trim() : v));
     q(`UPDATE users SET ${fields.map(([k]) => `${k} = ?`)} WHERE id = ?`).run(...values, req.user.id);
     res.json(withStats(q('SELECT * FROM users WHERE id = ?').get(req.user.id)));
   });
@@ -240,11 +250,11 @@ export function createApp(db) {
 
   app.get('/api/menu', (req, res) => res.json(withModifiers(q('SELECT * FROM menu_items WHERE active = 1 ORDER BY category, name').all())));
 
-  // Birthday reward: Gold only, on the birthday, once per year (a cancelled order gives it back).
+  // Birthday treat: every member, during their birthday week (±3 days), once per year (a cancelled order gives it back).
   const usedThisYear = (u, r) => !!q(`SELECT 1 FROM orders WHERE user_id = ? AND reward_id = ? AND status != 'cancelled'
     AND created_at >= ?`).get(u.id, r.id, `${new Date().getUTCFullYear()}-01-01`);
   const rewardsFor = (u) => q('SELECT * FROM rewards ORDER BY cost_points').all()
-    .filter((r) => !r.birthday_only || (tierFor(u.lifetime_points).name === 'Gold' && isBirthday(u) && !usedThisYear(u, r)));
+    .filter((r) => !r.birthday_only || (inBirthdayWeek(u.birthday, berlinToday()) && !usedThisYear(u, r)));
 
   app.get('/api/rewards', customer, (req, res) => res.json(rewardsFor(req.user)));
 
@@ -292,6 +302,7 @@ export function createApp(db) {
   });
 
   // --- orders ---------------------------------------------------------------
+  const giftBack = (giftId) => q("UPDATE gifts SET status = 'active', redeemed_by = NULL, order_id = NULL WHERE id = ?").run(giftId); // order cancelled
   const withItems = (orders) => {
     const items = q(`SELECT oi.*, m.name, m.photo FROM order_items oi JOIN menu_items m ON m.id = oi.menu_item_id WHERE oi.order_id = ?`);
     const mods = q(`SELECT om.option_id, om.group_name, om.name, om.price_cents, COALESCE(mo.is_default, 0) is_default
@@ -301,7 +312,8 @@ export function createApp(db) {
 
   app.post('/api/orders', customer, (req, res) => {
     if (paused()) fail(503, 'Online-Bestellungen sind gerade pausiert. Bitte versuch es gleich noch einmal.');
-    const { items, pickup_at, reward_id } = req.body;
+    const { items, pickup_at, reward_id, gift_code } = req.body;
+    if (reward_id != null && gift_code != null) fail(400, 'Bitte entweder eine Prämie oder einen Gutschein einlösen');
     if (!Array.isArray(items) || !items.length || items.length > 30) fail(400, 'Warenkorb ist leer');
     const menu = q('SELECT * FROM menu_items WHERE id = ? AND active = 1');
     const groupsByItem = modifierGroups();
@@ -331,15 +343,23 @@ export function createApp(db) {
         if (!reward) fail(400, 'Prämie nicht verfügbar');
         if (user.points < reward.cost_points) fail(400, 'Nicht genug Punkte');
       }
+      let gift = null;
+      if (gift_code != null) {
+        gift = q("SELECT * FROM gifts WHERE code = ? AND status = 'active'").get(String(gift_code).trim().toUpperCase());
+        if (!gift) fail(400, 'Gutschein ist nicht gültig oder schon eingelöst');
+        if (gift.sender_id === user.id) fail(400, 'Eigene Gutscheine kannst du verschenken, aber nicht selbst einlösen');
+      }
       let price;
       try {
-        price = priceOrder(lines, reward, tierFor(user.lifetime_points).discountPct);
+        // A gift is one coffee of choice: priced like a coffee reward (base free, options charged).
+        price = priceOrder(lines, gift ? { category_allowed: 'coffee' } : reward, tierFor(user.lifetime_points).discountPct);
       } catch {
-        fail(400, 'Für diese Prämie fehlt ein passender Artikel im Warenkorb');
+        fail(400, gift ? 'Für den Gutschein fehlt ein Kaffee im Warenkorb' : 'Für diese Prämie fehlt ein passender Artikel im Warenkorb');
       }
       const cost = reward?.cost_points ?? 0;
-      const { lastInsertRowid } = q(`INSERT INTO orders (user_id, pickup_at, subtotal_cents, discount_cents, total_cents, reward_id, reward_points)
-        VALUES (?, ?, ?, ?, ?, ?, ?)`).run(user.id, pickup.toISOString(), price.subtotal, price.discount, price.total, reward?.id ?? null, cost);
+      const { lastInsertRowid } = q(`INSERT INTO orders (user_id, pickup_at, subtotal_cents, discount_cents, total_cents, reward_id, reward_points, gift_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(user.id, pickup.toISOString(), price.subtotal, price.discount, price.total, reward?.id ?? null, cost, gift?.id ?? null);
+      if (gift) q("UPDATE gifts SET status = 'redeemed', redeemed_by = ?, order_id = ? WHERE id = ?").run(user.id, lastInsertRowid, gift.id);
       const oi = q('INSERT INTO order_items (order_id, menu_item_id, qty, unit_price_cents) VALUES (?, ?, ?, ?)');
       const om = q('INSERT INTO order_item_modifiers (order_item_id, option_id, group_name, name, price_cents) VALUES (?, ?, ?, ?, ?)');
       const groupName = new Map([...groupsByItem.values()].flat().map((g) => [g.id, g.name]));
@@ -364,8 +384,155 @@ export function createApp(db) {
       if (o.status !== 'new') fail(409, 'Bestellung wird schon zubereitet');
       q("UPDATE orders SET status = 'cancelled' WHERE id = ?").run(o.id);
       if (o.reward_points) q('UPDATE users SET points = points + ? WHERE id = ?').run(o.reward_points, o.user_id);
+      if (o.gift_id) giftBack(o.gift_id);
     });
     res.json({ ok: true });
+  });
+
+  // --- Das Übliche & favorites ----------------------------------------------------
+  // Resolve an item + chosen option ids into what the guest sees (names, unit price).
+  function comboView(itemId, mods) {
+    const item = q('SELECT * FROM menu_items WHERE id = ?').get(itemId);
+    if (!item) return null;
+    const groups = modifierGroups().get(item.id) ?? [];
+    const known = new Set(groups.flatMap((g) => g.options.map((o) => o.id)));
+    const chosen = validateModifiers(groups, mods.filter((m) => known.has(m))); // options removed since then are dropped
+    return {
+      item: { ...item, modifiers: groups }, mods: chosen.map(({ id, name, price_cents, is_default }) => ({ id, name, price_cents, is_default })),
+      unit_price_cents: item.price_cents + chosen.reduce((a, o) => a + o.price_cents, 0),
+      available: !!item.active && !item.sold_out,
+    };
+  }
+
+  app.get('/api/me/usual', customer, (req, res) => {
+    const rows = q(`SELECT oi.id, oi.menu_item_id, oi.qty, o.created_at at FROM order_items oi JOIN orders o ON o.id = oi.order_id
+      WHERE o.user_id = ? AND o.status != 'cancelled'`).all(req.user.id);
+    const modsOf = q('SELECT option_id FROM order_item_modifiers WHERE order_item_id = ? AND option_id IS NOT NULL');
+    const combo = usualCombo(rows.map((r) => ({ ...r, mods: modsOf.all(r.id).map((m) => m.option_id) })));
+    if (!combo) return res.json(null);
+    const pickups = q("SELECT pickup_at FROM orders WHERE user_id = ? AND status != 'cancelled'").all(req.user.id).map((o) => o.pickup_at);
+    res.json({ ...comboView(combo.menu_item_id, combo.mods), count: combo.count, usual_time: usualTime(pickups) });
+  });
+
+  const favMods = (mods) => {
+    if (!Array.isArray(mods) || mods.length > 10 || !mods.every(Number.isInteger)) fail(400, 'Ungültige Optionen');
+    return [...new Set(mods)].sort((a, b) => a - b);
+  };
+  app.get('/api/me/favorites', customer, (req, res) =>
+    res.json(q('SELECT * FROM favorites WHERE user_id = ? ORDER BY created_at').all(req.user.id)
+      .map((f) => ({ id: f.id, ...comboView(f.menu_item_id, JSON.parse(f.mods)) })).filter((f) => f.item)));
+
+  app.post('/api/me/favorites', customer, (req, res) => {
+    const { menu_item_id } = req.body;
+    const mods = favMods(req.body.mods ?? []);
+    const item = Number.isInteger(menu_item_id) && q('SELECT * FROM menu_items WHERE id = ? AND active = 1').get(menu_item_id);
+    if (!item) fail(400, 'Artikel nicht verfügbar');
+    try { validateModifiers(modifierGroups().get(item.id) ?? [], mods); } catch (e) { fail(400, e.message); }
+    const existing = q('SELECT id FROM favorites WHERE user_id = ? AND menu_item_id = ? AND mods = ?').get(req.user.id, item.id, JSON.stringify(mods));
+    if (existing) return res.json({ id: existing.id, ...comboView(item.id, mods) });
+    const { lastInsertRowid } = q('INSERT INTO favorites (user_id, menu_item_id, mods) VALUES (?, ?, ?)').run(req.user.id, item.id, JSON.stringify(mods));
+    res.status(201).json({ id: lastInsertRowid, ...comboView(item.id, mods) });
+  });
+
+  app.delete('/api/me/favorites/:id', customer, (req, res) => {
+    if (!q('DELETE FROM favorites WHERE id = ? AND user_id = ?').run(Number(req.params.id), req.user.id).changes) fail(404, 'Favorit nicht gefunden');
+    res.json({ ok: true });
+  });
+
+  // --- bean subscription (pickup reservations) ----------------------------------------
+  const beanView = (b) => ({ ...b, price_cents: BEAN_PRICES[b.bean][b.size] });
+  app.get('/api/me/beans', customer, (req, res) =>
+    res.json(q("SELECT * FROM bean_subscriptions WHERE user_id = ? ORDER BY status = 'cancelled', created_at").all(req.user.id).map(beanView)));
+
+  app.post('/api/me/beans', customer, (req, res) => {
+    const { bean, size, every_weeks, first_pickup } = req.body;
+    if (!Object.hasOwn(BEAN_PRICES, bean) || !Object.hasOwn(BEAN_PRICES[bean], size)) fail(400, 'Unbekannte Sorte oder Größe');
+    if (![1, 2, 4].includes(every_weeks)) fail(400, 'Rhythmus: jede 1, 2 oder 4 Wochen');
+    const today = berlinToday();
+    const latest = new Date(Date.now() + 60 * 864e5).toISOString().slice(0, 10);
+    if (typeof first_pickup !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(first_pickup) || first_pickup <= today || first_pickup > latest) fail(400, 'Erste Abholung: ab morgen, höchstens 60 Tage im Voraus');
+    const { lastInsertRowid } = q('INSERT INTO bean_subscriptions (user_id, bean, size, every_weeks, next_pickup) VALUES (?, ?, ?, ?, ?)')
+      .run(req.user.id, bean, size, every_weeks, first_pickup);
+    res.status(201).json(beanView(q('SELECT * FROM bean_subscriptions WHERE id = ?').get(lastInsertRowid)));
+  });
+
+  app.patch('/api/me/beans/:id', customer, (req, res) => {
+    const { action } = req.body;
+    if (!['skip', 'pause', 'resume', 'cancel'].includes(action)) fail(400, 'Aktion: skip, pause, resume oder cancel');
+    const row = tx(db, () => {
+      const b = q('SELECT * FROM bean_subscriptions WHERE id = ? AND user_id = ?').get(Number(req.params.id), req.user.id);
+      if (!b) fail(404, 'Abo nicht gefunden');
+      if (b.status === 'cancelled') fail(409, 'Dieses Abo ist beendet');
+      const set = (sql, ...v) => q(`UPDATE bean_subscriptions SET ${sql} WHERE id = ?`).run(...v, b.id);
+      if (action === 'skip') set('next_pickup = ?', addWeeks(b.next_pickup, b.every_weeks));
+      if (action === 'pause') set("status = 'paused'");
+      if (action === 'resume') set("status = 'active'");
+      if (action === 'cancel') set("status = 'cancelled'");
+      return q('SELECT * FROM bean_subscriptions WHERE id = ?').get(b.id);
+    });
+    res.json(beanView(row));
+  });
+
+  // --- gifts: "Kaffee verschenken" ---------------------------------------------------------
+  const GIFT_POINTS = 100;
+  const GIFT_PRICE_CENTS = 500;
+  const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O, 1/I
+  const newGiftCode = () => {
+    for (;;) {
+      const code = 'G-' + [...randomBytes(8)].map((b) => CODE_CHARS[b % CODE_CHARS.length]).join('');
+      if (!q('SELECT 1 FROM gifts WHERE code = ?').get(code)) return code;
+    }
+  };
+  const giftView = (g) => ({ ...g, price_cents: g.pay === 'counter' ? GIFT_PRICE_CENTS : 0 });
+  const giftByCode = (code) => q('SELECT * FROM gifts WHERE code = ?').get(String(code).trim().toUpperCase());
+
+  app.post('/api/gifts', customer, (req, res) => {
+    const { recipient_name, message = '', pay } = req.body;
+    if (typeof recipient_name !== 'string' || !recipient_name.trim() || recipient_name.length > 40) fail(400, 'Für wen ist der Gutschein?');
+    if (typeof message !== 'string' || message.length > 200) fail(400, 'Nachricht höchstens 200 Zeichen');
+    if (!['points', 'counter'].includes(pay)) fail(400, 'Bezahlen mit Punkten oder an der Theke');
+    const gift = tx(db, () => {
+      if (pay === 'points') {
+        if (q('SELECT points FROM users WHERE id = ?').get(req.user.id).points < GIFT_POINTS) fail(400, `Dafür brauchst du ${GIFT_POINTS} Punkte`);
+        q('UPDATE users SET points = points - ? WHERE id = ?').run(GIFT_POINTS, req.user.id);
+      }
+      const { lastInsertRowid } = q(`INSERT INTO gifts (code, sender_id, recipient_name, message, pay, points_cost, status) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+        .run(newGiftCode(), req.user.id, recipient_name.trim(), message.trim(), pay, pay === 'points' ? GIFT_POINTS : 0, pay === 'points' ? 'active' : 'pending');
+      return q('SELECT * FROM gifts WHERE id = ?').get(lastInsertRowid);
+    });
+    res.status(201).json(giftView(gift));
+  });
+
+  app.get('/api/me/gifts', customer, (req, res) =>
+    res.json(q('SELECT * FROM gifts WHERE sender_id = ? ORDER BY created_at DESC').all(req.user.id).map(giftView)));
+
+  app.post('/api/gifts/:code/cancel', customer, (req, res) => {
+    const g = tx(db, () => {
+      const gift = giftByCode(req.params.code);
+      if (!gift || gift.sender_id !== req.user.id) fail(404, 'Gutschein nicht gefunden');
+      if (!['pending', 'active'].includes(gift.status)) fail(409, 'Dieser Gutschein ist schon eingelöst oder storniert');
+      q("UPDATE gifts SET status = 'cancelled' WHERE id = ?").run(gift.id);
+      if (gift.points_cost) q('UPDATE users SET points = points + ? WHERE id = ?').run(gift.points_cost, gift.sender_id);
+      return q('SELECT * FROM gifts WHERE id = ?').get(gift.id);
+    });
+    res.json(giftView(g));
+  });
+
+  // Public: what the friend sees when opening the link (no ids, no emails).
+  app.get('/api/gifts/:code', (req, res) => {
+    const g = giftByCode(req.params.code);
+    if (!g) fail(404, 'Gutschein nicht gefunden');
+    const from = q('SELECT name FROM users WHERE id = ?').get(g.sender_id).name.split(' ')[0];
+    res.json({ from, recipient_name: g.recipient_name, message: g.message, status: g.status });
+  });
+
+  app.get('/api/gifts/:code/qr', async (req, res, next) => {
+    try {
+      const g = giftByCode(req.params.code);
+      if (!g) fail(404, 'Gutschein nicht gefunden');
+      const url = `${req.protocol}://${req.get('host')}/#/gutschein?c=${g.code}`;
+      res.type('image/svg+xml').send(await QRCode.toString(url, { type: 'svg', margin: 1, color: { dark: '#3b2615', light: '#ffffff' } }));
+    } catch (e) { next(e); }
   });
 
   // --- staff / admin --------------------------------------------------------
@@ -389,6 +556,7 @@ export function createApp(db) {
         q('UPDATE users SET points = points + ?, lifetime_points = lifetime_points + ? WHERE id = ?').run(pts, pts, o.user_id);
       }
       if (status === 'cancelled' && o.reward_points) q('UPDATE users SET points = points + ? WHERE id = ?').run(o.reward_points, o.user_id);
+      if (status === 'cancelled' && o.gift_id) giftBack(o.gift_id);
     });
     res.json({ ok: true });
   });
@@ -600,6 +768,43 @@ export function createApp(db) {
     if (!u) fail(404, 'Kein Mitglied mit dieser Nummer');
     const orders = withItems(q(`SELECT * FROM orders WHERE user_id = ? AND status IN ('new','preparing','ready') ORDER BY pickup_at`).all(u.id));
     res.json({ id: u.id, name: u.name, member_id: u.member_id, points: u.points, tier: tierFor(u.lifetime_points), orders });
+  });
+
+  // --- staff: bean bags due, gifts paid at the counter --------------------------------
+  app.get('/api/admin/beans', staff, (req, res) => {
+    const days = Number(req.query.days ?? 7);
+    if (!Number.isInteger(days) || days < 0 || days > 60) fail(400, 'days=0..60');
+    const until = new Date(Date.parse(`${berlinToday()}T00:00:00Z`) + days * 864e5).toISOString().slice(0, 10);
+    res.json(q(`SELECT b.*, u.name, u.member_id FROM bean_subscriptions b JOIN users u ON u.id = b.user_id
+      WHERE b.status = 'active' AND b.next_pickup <= ? ORDER BY b.next_pickup, u.name`).all(until).map(beanView));
+  });
+
+  app.post('/api/admin/beans/:id/handed', staff, (req, res) => {
+    const row = tx(db, () => {
+      const b = q("SELECT * FROM bean_subscriptions WHERE id = ? AND status = 'active'").get(Number(req.params.id));
+      if (!b) fail(409, 'Kein aktives Abo');
+      q('UPDATE bean_subscriptions SET next_pickup = ? WHERE id = ?').run(addWeeks(b.next_pickup, b.every_weeks), b.id);
+      return q('SELECT * FROM bean_subscriptions WHERE id = ?').get(b.id);
+    });
+    res.json(beanView(row));
+  });
+
+  app.get('/api/admin/gifts/:code', staff, (req, res) => {
+    const g = giftByCode(req.params.code);
+    if (!g) fail(404, 'Gutschein nicht gefunden');
+    res.json({ ...giftView(g), sender: q('SELECT name, member_id FROM users WHERE id = ?').get(g.sender_id) });
+  });
+
+  // Paid at the counter → staff switch the gift on.
+  app.post('/api/admin/gifts/:code/activate', staff, (req, res) => {
+    const g = tx(db, () => {
+      const gift = giftByCode(req.params.code);
+      if (!gift) fail(404, 'Gutschein nicht gefunden');
+      if (gift.status !== 'pending') fail(409, 'Dieser Gutschein ist nicht offen');
+      q("UPDATE gifts SET status = 'active' WHERE id = ?").run(gift.id);
+      return q('SELECT * FROM gifts WHERE id = ?').get(gift.id);
+    });
+    res.json(giftView(g));
   });
 
   // --- staff management (Mitarbeiterverwaltung) ---------------------------------

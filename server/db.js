@@ -113,6 +113,37 @@ CREATE TABLE IF NOT EXISTS planned_shifts (
   end TEXT NOT NULL,
   note TEXT NOT NULL DEFAULT ''
 );
+CREATE TABLE IF NOT EXISTS favorites (
+  id INTEGER PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  menu_item_id INTEGER NOT NULL REFERENCES menu_items(id) ON DELETE CASCADE,
+  mods TEXT NOT NULL DEFAULT '[]',
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  UNIQUE (user_id, menu_item_id, mods)
+);
+CREATE TABLE IF NOT EXISTS bean_subscriptions (
+  id INTEGER PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  bean TEXT NOT NULL CHECK (bean IN ('espresso','filter','decaf')),
+  size TEXT NOT NULL CHECK (size IN ('250g','1kg')),
+  every_weeks INTEGER NOT NULL CHECK (every_weeks IN (1,2,4)),
+  next_pickup TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','paused','cancelled')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE TABLE IF NOT EXISTS gifts (
+  id INTEGER PRIMARY KEY,
+  code TEXT UNIQUE NOT NULL,
+  sender_id INTEGER NOT NULL REFERENCES users(id),
+  recipient_name TEXT NOT NULL,
+  message TEXT NOT NULL DEFAULT '',
+  pay TEXT NOT NULL CHECK (pay IN ('points','counter')),
+  points_cost INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL CHECK (status IN ('pending','active','redeemed','cancelled')),
+  redeemed_by INTEGER REFERENCES users(id),
+  order_id INTEGER REFERENCES orders(id),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
@@ -124,6 +155,8 @@ const LATER_COLUMNS = [
   ['menu_items', 'sold_out', 'INTEGER NOT NULL DEFAULT 0'],
   ['users', 'active', 'INTEGER NOT NULL DEFAULT 1'],
   ['users', 'must_change_password', 'INTEGER NOT NULL DEFAULT 0'],
+  ['users', 'preferences', "TEXT NOT NULL DEFAULT '{}'"],
+  ['orders', 'gift_id', 'INTEGER REFERENCES gifts(id)'],
 ];
 const DEFAULT_SETTINGS = { slot_capacity: () => process.env.SLOT_CAPACITY || '5', orders_paused: () => '0', extra_delay_min: () => '0' };
 

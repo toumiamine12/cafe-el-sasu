@@ -839,3 +839,162 @@ test('payroll CSV keeps two people with the same name apart', async () => {
   assert.equal(sums.length, 2);
   assert.deepEqual(sums.map((l) => l.split(';')[8]).sort(), ['40,00', '80,00']);
 });
+
+// --- guest experience ---------------------------------------------------------------
+
+async function newGuest(tag) {
+  const c = client();
+  const r = await c('POST', '/api/register', { name: `Gast ${tag}`, email: `${tag}@example.com`, password: 'kaffee1234' });
+  assert.equal(r.status, 201);
+  return c;
+}
+
+test('Das Übliche: most-ordered exact combination and usual pickup time', async () => {
+  const c = await newGuest('usual');
+  const flat = await menuItem('Flat White');
+  const oat = optionId(flat, 'Hafermilch');
+  const shot = optionId(flat, 'Extra Shot');
+  assert.equal((await c('GET', '/api/me/usual')).body, null); // nothing ordered yet
+  for (const items of [[{ id: flat.id, qty: 1, mods: [shot, oat] }], [{ id: flat.id, qty: 1, mods: [oat, shot] }], [{ id: itemByName('Espresso').id, qty: 1 }]]) {
+    assert.equal((await c('POST', '/api/orders', { items, pickup_at: quietSlot() })).status, 201);
+  }
+  const u = (await c('GET', '/api/me/usual')).body;
+  assert.equal(u.item.name, 'Flat White');
+  assert.deepEqual(u.mods.map((m) => m.name), ['Hafermilch', 'Extra Shot']);
+  assert.equal(u.unit_price_cents, flat.price_cents + 50 + 80);
+  assert.match(u.usual_time, /^\d\d:\d\d$/);
+});
+
+test('favorites: save a combination once, list, delete; only your own', async () => {
+  const c = await newGuest('fav');
+  const other = await newGuest('fav2');
+  const flat = await menuItem('Flat White');
+  const fav = { menu_item_id: flat.id, mods: [optionId(flat, 'Mandelmilch'), optionId(flat, 'Vanille')] };
+  const a = await c('POST', '/api/me/favorites', fav);
+  assert.equal(a.status, 201);
+  assert.equal((await c('POST', '/api/me/favorites', { ...fav, mods: [...fav.mods].reverse() })).body.id, a.body.id); // same combo
+  assert.equal((await c('POST', '/api/me/favorites', { menu_item_id: flat.id, mods: [999999] })).status, 400);
+  const list = (await c('GET', '/api/me/favorites')).body;
+  assert.equal(list.length, 1);
+  assert.deepEqual(list[0].mods.map((m) => m.name), ['Mandelmilch', 'Vanille']);
+  assert.equal(list[0].unit_price_cents, flat.price_cents + 50 + 40);
+  assert.equal((await other('DELETE', `/api/me/favorites/${a.body.id}`)).status, 404);
+  assert.equal((await c('DELETE', `/api/me/favorites/${a.body.id}`)).status, 200);
+  assert.deepEqual((await c('GET', '/api/me/favorites')).body, []);
+  const lena = await login('SASU-1001', 'staff123');
+  assert.equal((await lena('GET', '/api/me/favorites')).status, 403);
+});
+
+test('preferences: preferred milk and vegan-only are validated and returned', async () => {
+  const c = await newGuest('pref');
+  const r = await c('PATCH', '/api/me', { preferences: { milk: 'Hafermilch', vegan_only: true } });
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body.preferences, { milk: 'Hafermilch', vegan_only: true });
+  assert.deepEqual((await c('GET', '/api/me')).body.preferences, { milk: 'Hafermilch', vegan_only: true });
+  for (const bad of [{ milk: 'Kuhmilch', vegan_only: false }, { milk: null, vegan_only: 'ja' }, { milk: null, vegan_only: false, extra: 1 }, 'x']) {
+    assert.equal((await c('PATCH', '/api/me', { preferences: bad })).status, 400, JSON.stringify(bad));
+  }
+  assert.deepEqual((await c('PATCH', '/api/me', { preferences: { milk: null, vegan_only: false } })).body.preferences, { milk: null, vegan_only: false });
+});
+
+const tomorrow = () => new Date(Date.now() + 864e5).toISOString().slice(0, 10);
+
+test('bean subscription: reserve, skip, pause, resume, cancel', async () => {
+  const c = await newGuest('beans');
+  for (const bad of [{ bean: 'robusta', size: '250g', every_weeks: 2, first_pickup: tomorrow() }, { bean: 'espresso', size: '500g', every_weeks: 2, first_pickup: tomorrow() },
+    { bean: 'espresso', size: '250g', every_weeks: 3, first_pickup: tomorrow() }, { bean: 'espresso', size: '250g', every_weeks: 2, first_pickup: '2020-01-01' }]) {
+    assert.equal((await c('POST', '/api/me/beans', bad)).status, 400, JSON.stringify(bad));
+  }
+  const r = await c('POST', '/api/me/beans', { bean: 'espresso', size: '250g', every_weeks: 2, first_pickup: tomorrow() });
+  assert.equal(r.status, 201);
+  assert.equal(r.body.price_cents, 890);
+  assert.equal(r.body.next_pickup, tomorrow());
+  const id = r.body.id;
+  const skip = await c('PATCH', `/api/me/beans/${id}`, { action: 'skip' });
+  assert.equal(skip.body.next_pickup, new Date(Date.parse(tomorrow()) + 14 * 864e5).toISOString().slice(0, 10));
+  assert.equal((await c('PATCH', `/api/me/beans/${id}`, { action: 'pause' })).body.status, 'paused');
+  assert.equal((await c('PATCH', `/api/me/beans/${id}`, { action: 'resume' })).body.status, 'active');
+  assert.equal((await c('PATCH', `/api/me/beans/${id}`, { action: 'explode' })).status, 400);
+  assert.equal((await (await newGuest('beans2'))('PATCH', `/api/me/beans/${id}`, { action: 'pause' })).status, 404);
+  assert.equal((await c('GET', '/api/me/beans')).body.length, 1);
+  assert.equal((await c('PATCH', `/api/me/beans/${id}`, { action: 'cancel' })).body.status, 'cancelled');
+  assert.equal((await c('PATCH', `/api/me/beans/${id}`, { action: 'resume' })).status, 409);
+});
+
+test('staff see due bean bags and mark them handed out', async () => {
+  const c = await newGuest('beans3');
+  const lena = await login('SASU-1001', 'staff123');
+  const sub = (await c('POST', '/api/me/beans', { bean: 'decaf', size: '1kg', every_weeks: 4, first_pickup: tomorrow() })).body;
+  assert.equal((await c('GET', '/api/admin/beans?days=7')).status, 403);
+  const due = (await lena('GET', '/api/admin/beans?days=7')).body;
+  const row = due.find((d) => d.id === sub.id);
+  assert.ok(row && row.name === 'Gast beans3' && row.price_cents === 3190);
+  const handed = await lena('POST', `/api/admin/beans/${sub.id}/handed`);
+  assert.equal(handed.body.next_pickup, new Date(Date.parse(tomorrow()) + 28 * 864e5).toISOString().slice(0, 10));
+  assert.ok(!(await lena('GET', '/api/admin/beans?days=7')).body.some((d) => d.id === sub.id));
+});
+
+test('gift paid with points: link works once, for someone else, inside an order', async () => {
+  const sender = await newGuest('giver');
+  const friend = await newGuest('friend');
+  const senderId = db.prepare("SELECT id FROM users WHERE email = 'giver@example.com'").get().id;
+  assert.equal((await sender('POST', '/api/gifts', { recipient_name: 'Ali', message: 'Danke!', pay: 'points' })).status, 400); // 0 points
+  db.prepare('UPDATE users SET points = 150 WHERE id = ?').run(senderId);
+  const g = await sender('POST', '/api/gifts', { recipient_name: 'Ali', message: 'Danke für alles!', pay: 'points' });
+  assert.equal(g.status, 201);
+  assert.equal(g.body.status, 'active');
+  assert.match(g.body.code, /^G-[A-Z0-9]{8}$/);
+  assert.equal(db.prepare('SELECT points FROM users WHERE id = ?').get(senderId).points, 50);
+  const pub = (await client()('GET', `/api/gifts/${g.body.code}`)).body;
+  assert.deepEqual(Object.keys(pub).sort(), ['from', 'message', 'recipient_name', 'status']);
+  assert.equal(pub.from, 'Gast');
+  assert.equal((await client()('GET', '/api/gifts/G-NOPE0000')).status, 404);
+  assert.equal((await client()('GET', `/api/gifts/${g.body.code}/qr`)).status, 200);
+  const espresso = itemByName('Espresso').id;
+  const own = await sender('POST', '/api/orders', { items: [{ id: espresso, qty: 1 }], pickup_at: quietSlot(), gift_code: g.body.code });
+  assert.equal(own.status, 400); // not your own gift
+  const reward = db.prepare("SELECT id FROM rewards WHERE category_allowed = 'pastry'").get().id;
+  assert.equal((await friend('POST', '/api/orders', { items: [{ id: espresso, qty: 1 }], pickup_at: quietSlot(), gift_code: g.body.code, reward_id: reward })).status, 400);
+  assert.equal((await friend('POST', '/api/orders', { items: [{ id: itemByName('Croissant').id, qty: 1 }], pickup_at: quietSlot(), gift_code: g.body.code })).status, 400); // no coffee
+  const used = await friend('POST', '/api/orders', { items: [{ id: espresso, qty: 1 }, { id: itemByName('Croissant').id, qty: 1 }], pickup_at: quietSlot(), gift_code: g.body.code });
+  assert.equal(used.status, 201);
+  assert.equal(used.body.total_cents, itemByName('Croissant').price_cents);
+  assert.equal((await client()('GET', `/api/gifts/${g.body.code}`)).body.status, 'redeemed');
+  assert.equal((await friend('POST', '/api/orders', { items: [{ id: espresso, qty: 1 }], pickup_at: quietSlot(), gift_code: g.body.code })).status, 400);
+  assert.equal((await sender('POST', `/api/gifts/${g.body.code}/cancel`)).status, 409);
+  // cancelling the order gives the gift back
+  await friend('POST', `/api/orders/${used.body.id}/cancel`);
+  assert.equal((await client()('GET', `/api/gifts/${g.body.code}`)).body.status, 'active');
+  assert.ok((await sender('GET', '/api/me/gifts')).body.some((x) => x.code === g.body.code));
+});
+
+test('gift paid at the counter: pending until staff activate it; cancel refunds points gifts', async () => {
+  const sender = await newGuest('counter');
+  const lena = await login('SASU-1001', 'staff123');
+  const g = (await sender('POST', '/api/gifts', { recipient_name: 'Mo', message: '', pay: 'counter' })).body;
+  assert.equal(g.status, 'pending');
+  assert.equal(g.price_cents, 500);
+  const friend = await newGuest('counterfriend');
+  assert.equal((await friend('POST', '/api/orders', { items: [{ id: itemByName('Espresso').id, qty: 1 }], pickup_at: quietSlot(), gift_code: g.code })).status, 400);
+  assert.equal((await sender('POST', `/api/admin/gifts/${g.code}/activate`)).status, 403);
+  assert.equal((await lena('GET', `/api/admin/gifts/${g.code}`)).body.status, 'pending');
+  assert.equal((await lena('POST', `/api/admin/gifts/${g.code}/activate`)).body.status, 'active');
+  assert.equal((await lena('POST', `/api/admin/gifts/${g.code}/activate`)).status, 409);
+  // a points gift cancelled before use refunds the points
+  const id = db.prepare("SELECT id FROM users WHERE email = 'counter@example.com'").get().id;
+  db.prepare('UPDATE users SET points = 100 WHERE id = ?').run(id);
+  const p = (await sender('POST', '/api/gifts', { recipient_name: 'Zoe', message: '', pay: 'points' })).body;
+  assert.equal((await sender('POST', `/api/gifts/${p.code}/cancel`)).body.status, 'cancelled');
+  assert.equal(db.prepare('SELECT points FROM users WHERE id = ?').get(id).points, 100);
+});
+
+test('every member gets the birthday treat during their birthday week', async () => {
+  const c = await newGuest('bday');
+  const inThree = new Date(Date.now() + 2 * 864e5).toISOString().slice(0, 10);
+  db.prepare("UPDATE users SET birthday = ? WHERE email = 'bday@example.com'").run('1990' + inThree.slice(4));
+  assert.ok((await c('GET', '/api/rewards')).body.some((r) => r.birthday_only));
+  assert.equal((await c('GET', '/api/me')).body.birthday_week, true);
+  const later = new Date(Date.now() + 20 * 864e5).toISOString().slice(0, 10);
+  db.prepare("UPDATE users SET birthday = ? WHERE email = 'bday@example.com'").run('1990' + later.slice(4));
+  assert.ok(!(await c('GET', '/api/rewards')).body.some((r) => r.birthday_only));
+});

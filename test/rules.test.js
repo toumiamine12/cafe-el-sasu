@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { tierFor, isOpenAt, validatePickup, priceOrder, pointsFor, nextChange, validateModifiers, slotStart, SLOT_CAPACITY, netMinutes, breakShortfall, payCents } from '../server/rules.js';
+import { tierFor, isOpenAt, validatePickup, priceOrder, pointsFor, nextChange, validateModifiers, slotStart, SLOT_CAPACITY, netMinutes, breakShortfall, payCents,
+  inBirthdayWeek, usualCombo, usualTime, BEAN_PRICES, addWeeks } from '../server/rules.js';
 
 // Berlin is UTC+2 in summer: 2026-07-07 is a Tuesday.
 const berlin = (iso) => new Date(iso + '+02:00');
@@ -144,4 +145,38 @@ test('breakShortfall follows the 6 h / 9 h rule', () => {
 test('payCents rounds once from minutes', () => {
   assert.equal(payCents(450, 1400), 10500);
   assert.equal(payCents(7, 1450), 169); // 7/60 * 1450 = 169.17
+});
+
+// --- guest experience --------------------------------------------------------------
+test('inBirthdayWeek: ±3 days, across new year, Feb 29 in other years', () => {
+  assert.equal(inBirthdayWeek('1990-10-12', '2026-10-12'), true);
+  assert.equal(inBirthdayWeek('1990-10-12', '2026-10-15'), true);
+  assert.equal(inBirthdayWeek('1990-10-12', '2026-10-16'), false);
+  assert.equal(inBirthdayWeek('1990-01-01', '2026-12-30'), true);
+  assert.equal(inBirthdayWeek('1990-12-31', '2027-01-02'), true);
+  assert.equal(inBirthdayWeek('2000-02-29', '2027-02-28'), true);
+  assert.equal(inBirthdayWeek(null, '2026-10-12'), false);
+});
+
+test('usualCombo picks the most-ordered exact combination, ties to the latest', () => {
+  const lines = [
+    { menu_item_id: 5, mods: [11, 30], qty: 1, at: '2026-10-01' },
+    { menu_item_id: 5, mods: [30, 11], qty: 1, at: '2026-10-02' },
+    { menu_item_id: 5, mods: [], qty: 1, at: '2026-10-03' },
+    { menu_item_id: 7, mods: [], qty: 2, at: '2026-10-04' },
+  ];
+  assert.deepEqual(usualCombo(lines), { menu_item_id: 7, mods: [], count: 2 });
+  assert.deepEqual(usualCombo(lines.slice(0, 3)), { menu_item_id: 5, mods: [11, 30], count: 2 });
+  assert.equal(usualCombo([]), null);
+});
+
+test('usualTime is the most common Berlin pickup time', () => {
+  assert.equal(usualTime(['2026-10-01T06:30:00.000Z', '2026-10-02T06:30:00.000Z', '2026-10-03T13:00:00.000Z']), '08:30');
+  assert.equal(usualTime([]), null);
+});
+
+test('bean prices and pickup rhythm', () => {
+  assert.equal(BEAN_PRICES.espresso['250g'], 890);
+  assert.equal(addWeeks('2026-10-12', 2), '2026-10-26');
+  assert.equal(addWeeks('2026-12-28', 1), '2027-01-04');
 });

@@ -107,3 +107,52 @@ export function breakShortfall(workedMinutes, breakMinutes) {
 
 // Pay for worked minutes at an hourly wage in cents, rounded once.
 export const payCents = (minutes, wageCents) => Math.round((minutes / 60) * wageCents);
+
+// --- guest experience ------------------------------------------------------------------
+// Birthday treat window: the birthday ±3 days (any year; Feb 29 counts as Feb 28 otherwise).
+export function inBirthdayWeek(birthday, todayIso) {
+  if (!birthday) return false;
+  const [, m, d] = birthday.split('-').map(Number);
+  const today = Date.parse(`${todayIso}T00:00:00Z`);
+  const year = Number(todayIso.slice(0, 4));
+  return [year - 1, year, year + 1].some((y) => {
+    const leap = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+    const day = m === 2 && d === 29 && !leap ? 28 : d;
+    return Math.abs(Date.UTC(y, m - 1, day) - today) <= 3 * 864e5;
+  });
+}
+
+// The guest's usual: most-ordered exact item + options combination; ties go to the most recent.
+// lines: [{ menu_item_id, mods: [optionId], qty, at }]
+export function usualCombo(lines) {
+  const combos = new Map();
+  for (const l of lines) {
+    const mods = [...l.mods].sort((a, b) => a - b);
+    const key = `${l.menu_item_id}:${mods.join(',')}`;
+    const c = combos.get(key) ?? { menu_item_id: l.menu_item_id, mods, count: 0, last: '' };
+    c.count += l.qty;
+    if (l.at > c.last) c.last = l.at;
+    combos.set(key, c);
+  }
+  const best = [...combos.values()].sort((a, b) => b.count - a.count || (a.last < b.last ? 1 : -1))[0];
+  return best ? { menu_item_id: best.menu_item_id, mods: best.mods, count: best.count } : null;
+}
+
+// Most common pickup time of day (Berlin, HH:MM).
+const berlinHM = new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+export function usualTime(isoTimes) {
+  const counts = new Map();
+  for (const t of isoTimes) {
+    const hm = berlinHM.format(new Date(t));
+    counts.set(hm, (counts.get(hm) ?? 0) + 1);
+  }
+  return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+}
+
+// Whole-bean bags for the pickup subscription, prices in cents.
+export const BEAN_PRICES = {
+  espresso: { '250g': 890, '1kg': 2990 },
+  filter: { '250g': 850, '1kg': 2790 },
+  decaf: { '250g': 950, '1kg': 3190 },
+};
+export const addWeeks = (dateIso, weeks) => new Date(Date.parse(`${dateIso}T00:00:00Z`) + weeks * 7 * 864e5).toISOString().slice(0, 10);
