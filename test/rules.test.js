@@ -15,20 +15,21 @@ test('tierFor picks tier by lifetime points', () => {
   assert.equal(tierFor(500).next, null);
 });
 
-test('isOpenAt follows opening hours in Berlin time', () => {
-  assert.equal(isOpenAt(berlin('2026-07-06T12:00')), false); // Monday
-  assert.equal(isOpenAt(berlin('2026-07-07T10:59')), false); // Tue before 11
-  assert.equal(isOpenAt(berlin('2026-07-07T11:00')), true);
-  assert.equal(isOpenAt(berlin('2026-07-07T22:00')), false); // Tue closes 22
-  assert.equal(isOpenAt(berlin('2026-07-12T23:59')), true);  // Sunday late
-  assert.equal(isOpenAt(berlin('2026-07-11T09:59')), false); // Sat before 10
+test('isOpenAt: every day 09:00–20:00 Berlin time', () => {
+  for (const day of ['06', '07', '08', '09', '10', '11', '12']) { // Monday … Sunday
+    assert.equal(isOpenAt(berlin(`2026-07-${day}T08:59`)), false, `${day} before 9`);
+    assert.equal(isOpenAt(berlin(`2026-07-${day}T09:00`)), true, `${day} 9:00`);
+    assert.equal(isOpenAt(berlin(`2026-07-${day}T19:59`)), true, `${day} 19:59`);
+    assert.equal(isOpenAt(berlin(`2026-07-${day}T20:00`)), false, `${day} closes 20:00`);
+  }
 });
 
 test('validatePickup needs 15 minutes lead and open hours', () => {
   const now = berlin('2026-07-07T12:00');
   assert.ok(validatePickup(new Date(now.getTime() + 10 * 60e3), now));
   assert.equal(validatePickup(new Date(now.getTime() + 20 * 60e3), now), null);
-  assert.ok(validatePickup(berlin('2026-07-13T12:00'), now)); // Monday
+  assert.ok(validatePickup(berlin('2026-07-07T20:30'), now)); // after closing
+  assert.equal(validatePickup(berlin('2026-07-13T12:00'), now), null); // Monday is open now
   assert.ok(validatePickup(new Date('nope'), now));
 });
 
@@ -61,10 +62,9 @@ test('pointsFor gives 1 point per full euro', () => {
 });
 
 test('nextChange finds the next opening or closing time', () => {
-  assert.equal(nextChange(berlin('2026-07-07T12:00')).getTime(), berlin('2026-07-07T22:00').getTime()); // Tue open → closes 22:00
-  assert.equal(nextChange(berlin('2026-07-06T12:00')).getTime(), berlin('2026-07-07T11:00').getTime()); // Mon closed → Tue 11:00
-  assert.equal(nextChange(berlin('2026-07-07T22:05')).getTime(), berlin('2026-07-08T11:00').getTime()); // Tue night → Wed 11:00
-  assert.equal(nextChange(berlin('2026-07-12T23:50')).getTime(), berlin('2026-07-13T00:00').getTime()); // Sun closes midnight
+  assert.equal(nextChange(berlin('2026-07-07T12:00')).getTime(), berlin('2026-07-07T20:00').getTime()); // open → closes 20:00
+  assert.equal(nextChange(berlin('2026-07-07T20:05')).getTime(), berlin('2026-07-08T09:00').getTime()); // evening → opens 9:00
+  assert.equal(nextChange(berlin('2026-07-06T07:30')).getTime(), berlin('2026-07-06T09:00').getTime()); // Monday morning → 9:00 same day
 });
 
 // --- modifiers ---------------------------------------------------------------------

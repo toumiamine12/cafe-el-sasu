@@ -175,7 +175,7 @@ export function seed(db) {
         const lines = picks.map((i) => ({ ...i, qty: 1 }));
         const reward = userId < 7 && d % 4 === 0 ? rewards.find((r) => lines.some((l) => l.category === r.category_allowed)) : null;
         const price = priceOrder(lines, reward ?? null, TIER_PCT[userId] ?? 0);
-        const at = daysAgo(d, 8 + (n % 12));
+        const at = daysAgo(d, 7 + (n % 11)); // 9–19 Uhr Berlin in summer time
         const { lastInsertRowid } = o.run(userId, at, price.subtotal, price.discount, price.total, reward?.id ?? null, at);
         for (const i of picks) oi.run(lastInsertRowid, i.id, 1, i.price_cents);
       }
@@ -199,11 +199,12 @@ export function seed(db) {
     const plan = db.prepare('INSERT INTO planned_shifts (user_id, start, end, note) VALUES (?, ?, ?, ?)');
     for (let d = 0; d < 14; d++) {
       const date = new Date(Date.now() + d * 864e5).toISOString().slice(0, 10);
-      if (!isOpenAt(berlinTime(date, 12))) continue; // Monday: closed
-      const weekend = isOpenAt(berlinTime(date, 23));
-      plan.run(team[(2 * d) % team.length], berlinTime(date, weekend ? 9 : 10).toISOString(), berlinTime(date, 16).toISOString(), 'Frühschicht');
-      plan.run(team[(2 * d + 1) % team.length], berlinTime(date, 16).toISOString(), berlinTime(date, weekend ? 24 : 22).toISOString(), 'Spätschicht');
-      if (weekend) plan.run(team[(2 * d + 2) % team.length], berlinTime(date, 11).toISOString(), berlinTime(date, 19).toISOString(), 'Wochenende');
+      if (!isOpenAt(berlinTime(date, 12))) continue; // closed days get no shifts
+      const weekend = [0, 6].includes(new Date(`${date}T12:00:00Z`).getUTCDay());
+      // Open 9–20: early shift sets up from 8:30, late shift cleans up until 20:30.
+      plan.run(team[(2 * d) % team.length], berlinTime(date, 8.5).toISOString(), berlinTime(date, 14.5).toISOString(), 'Frühschicht');
+      plan.run(team[(2 * d + 1) % team.length], berlinTime(date, 14.5).toISOString(), berlinTime(date, 20.5).toISOString(), 'Spätschicht');
+      if (weekend) plan.run(team[(2 * d + 2) % team.length], berlinTime(date, 11).toISOString(), berlinTime(date, 17).toISOString(), 'Wochenende');
     }
   });
 }

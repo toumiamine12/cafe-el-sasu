@@ -25,7 +25,7 @@ Built with **Node.js, Express and SQLite** (`node:sqlite`). The frontend is plai
 **Customers**
 - Register and get a member ID (`SASU-1007`, …); log in with the member ID or email
 - Menu of 49 items laid out like a printed café menu: sticky category bar, search, item popup with quantity, allergen/vegan tags, floating cart bar
-- Preorder for pickup: only valid 15-minute slots inside opening hours, at least 15 min ahead
+- Preorder for pickup: only valid 15-minute slots inside opening hours (every day 09:00–20:00, Europe/Berlin), at least 15 min ahead
 - Pay at pickup, cancel while the order is still "Eingegangen"
 - Live order status on the account page (refreshes every 10 s, toast when ready)
 - Account page: welcome banner, member card with QR code (tap to enlarge at the counter), stats (orders, total spent, favorite), full purchase history with receipts, reorder in one click

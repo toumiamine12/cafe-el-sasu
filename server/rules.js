@@ -13,7 +13,8 @@ export function tierFor(lifetimePoints) {
 }
 
 // [open, close) in minutes after midnight, Berlin time. Sunday = 0.
-const HOURS = { 0: [600, 1440], 1: null, 2: [660, 1320], 3: [660, 1320], 4: [660, 1320], 5: [660, 1320], 6: [600, 1440] };
+const DAILY = [540, 1200]; // 09:00–20:00 every day
+const HOURS = { 0: DAILY, 1: DAILY, 2: DAILY, 3: DAILY, 4: DAILY, 5: DAILY, 6: DAILY };
 const DAYS = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
 const berlinFmt = new Intl.DateTimeFormat('en-US', {
   timeZone: 'Europe/Berlin', weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',

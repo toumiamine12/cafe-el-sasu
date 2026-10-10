@@ -22,7 +22,7 @@ export default {
       $('next-pickup').textContent = s.orders_paused
         ? 'Online-Bestellungen sind gerade pausiert – vor Ort sind wir für Sie da.'
         : `Früheste Abholung: ${at(new Date(s.next_pickup))}`;
-    }).catch(() => { if (alive()) $('live-status').textContent = 'Di – Fr 11 – 22 Uhr · Sa – So 10 – 24 Uhr'; });
+    }).catch(() => { if (alive()) $('live-status').textContent = 'Täglich 9 – 20 Uhr'; });
 
     api('/api/popular').then((items) => {
       if (!alive()) return;

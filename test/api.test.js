@@ -52,10 +52,10 @@ function nextOpen() {
   while (validatePickup(t)) t.setTime(t.getTime() + 3600e3);
   return t.toISOString();
 }
-function nextMonday() {
+// Tomorrow 21:30 Berlin (19:30 UTC in summer, 20:30 in winter): always after closing.
+function afterClosing() {
   const t = new Date(Date.now() + 864e5);
-  t.setUTCHours(10, 0, 0, 0); // 12:00 Berlin in summer, 11:00 in winter
-  while (t.getUTCDay() !== 1) t.setTime(t.getTime() + 864e5);
+  t.setUTCHours(19, 30, 0, 0);
   return t.toISOString();
 }
 
@@ -103,10 +103,10 @@ test('order gets tier discount', async () => {
   assert.equal(r.body.total_cents, 799 - Math.floor(799 * 0.05));
 });
 
-test('order rejects pickup on Monday and anonymous users', async () => {
+test('order rejects pickup after closing and anonymous users', async () => {
   const c = await login('SASU-1003', 'demo123');
   const items = [{ id: itemByName('Cappuccino').id, qty: 1 }];
-  assert.equal((await c('POST', '/api/orders', { items, pickup_at: nextMonday() })).status, 400);
+  assert.equal((await c('POST', '/api/orders', { items, pickup_at: afterClosing() })).status, 400);
   assert.equal((await client()('POST', '/api/orders', { items, pickup_at: nextOpen() })).status, 401);
 });
 
