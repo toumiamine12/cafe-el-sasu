@@ -50,7 +50,7 @@ export async function saveCardImage(user) {
   g.fillStyle = '#3b2615';
   g.textAlign = 'center';
   g.font = '400 40px Karla, Arial, sans-serif';
-  g.fillText('An der Theke zeigen – wir buchen deine Punkte darauf.', W / 2, 1720);
+  g.fillText('An der Theke zeigen – wir buchen Ihre Punkte darauf.', W / 2, 1720);
   g.font = 'italic 600 64px "Cormorant Garamond", Georgia, serif';
   g.fillText('Café el Sasu', W / 2, 200);
 

@@ -388,7 +388,7 @@ export default {
           <td>${u.role === 'admin' ? 'Inhaberin' : 'Personal'}</td>
           <td><input class="wage" type="number" step="0.01" min="0" value="${(u.hourly_wage / 100).toFixed(2)}" data-wage="${u.id}" aria-label="Stundenlohn ${esc(u.name)}" /> €</td>
           <td>${u.on_shift ? '<span class="status ready">Im Dienst</span>' : u.must_change_password ? '<span class="status">Erstes Login offen</span>' : '<span class="muted">—</span>'}</td>
-          <td>${u.id === user.id ? '<span class="muted small">du</span>' : switchHtml(u.id, u.active, `${u.name} aktiv`, 'active')}</td>
+          <td>${u.id === user.id ? '<span class="muted small">Sie</span>' : switchHtml(u.id, u.active, `${u.name} aktiv`, 'active')}</td>
         </tr>`).join('')}</tbody>`;
     }
     $('team-table').addEventListener('change', async (e) => {
@@ -502,7 +502,7 @@ export default {
         <div class="state"><span class="dot"></span>Im Dienst seit ${fmtClock.format(new Date(c.clock_in))} Uhr${c.on_break ? ' · gerade in Pause' : ''}</div>
         <div class="big">${dur(c.worked_minutes)}</div>
         <div class="muted">Pause bisher: ${c.break_minutes} min · Verdienst heute: ${euro(Math.round((c.worked_minutes / 60) * w.wage_cents))}</div>
-        ${c.break_shortfall ? `<p class="break-hint">Nach ${c.worked_minutes > 540 ? '9' : '6'} Stunden Arbeit stehen dir ${c.worked_minutes > 540 ? 45 : 30} Minuten Pause zu – noch ${c.break_shortfall} min offen.</p>` : ''}
+        ${c.break_shortfall ? `<p class="break-hint">Nach ${c.worked_minutes > 540 ? '9' : '6'} Stunden Arbeit stehen Ihnen ${c.worked_minutes > 540 ? 45 : 30} Minuten Pause zu – noch ${c.break_shortfall} min offen.</p>` : ''}
         <div class="actions"><button class="btn-cafe" type="button" id="break-btn">${c.on_break ? 'Pause beenden' : 'Pause starten'}</button>
           <button class="btn-ghost" type="button" id="clock-btn">Ausstempeln</button></div>`
         : `<div class="state">Nicht eingestempelt</div>

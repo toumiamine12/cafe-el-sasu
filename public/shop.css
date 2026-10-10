@@ -896,15 +896,30 @@ body { font-family: var(--text); color: var(--espresso); min-height: 100vh; disp
 .usual .muted { color: #e9dccb; }
 .usual .mod { background: #ffd23f; color: #1a1205; }
 
-/* loyalty pass + tier */
-.loyalty-row { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 20px; }
-.loyalty-row .panel { margin-bottom: 20px; }
-.stamps { display: grid; grid-template-columns: repeat(10, 1fr); gap: 8px; margin: 4px 0 14px; }
-.stamps span { aspect-ratio: 1; border-radius: 50%; border: 2px dashed #d8c3a8; }
-.stamps span.on { border: none; background: var(--caramel) url("photos/logo.png") center / 70% no-repeat; background-blend-mode: luminosity; box-shadow: inset 0 0 0 3px #8a5c34; }
-.tier-card h2 { margin-bottom: 6px; }
-.tier-card.Silver { background: linear-gradient(135deg, #f1f2f4, #fff); }
-.tier-card.Gold { background: linear-gradient(135deg, #fff4d6, #fffaf0); }
+/* Prämien-Strecke: one track, every reward a milestone, tier badge in the corner */
+.points-track { padding: 28px 32px 24px; }
+.points-track header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.points-now { font-size: 18px; color: var(--muted); }
+.points-now strong { font-size: 44px; line-height: 1; color: var(--espresso); font-variant-numeric: tabular-nums; margin-right: 4px; }
+.tier-badge { padding: 6px 14px; border-radius: 999px; font-weight: 700; font-size: 14px; color: #fff; white-space: nowrap; background: linear-gradient(135deg, #5a3a1f, var(--caramel)); }
+.tier-badge.Silver { background: linear-gradient(135deg, #55585e, #9da1a8); }
+.tier-badge.Gold { background: linear-gradient(135deg, #6f5212, #c9a23f); }
+.track { position: relative; height: 112px; margin: 30px 8px 6px; }
+.track .rail { position: absolute; left: 0; right: 0; top: 30px; height: 4px; border-radius: 2px; background: repeating-linear-gradient(90deg, #dccab3 0 8px, transparent 8px 14px); }
+.track .fill { position: absolute; left: 0; top: 29px; height: 6px; border-radius: 3px; background: var(--caramel); }
+.track .you { position: absolute; top: 0; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; }
+.track .you span { font-size: 12px; font-weight: 700; color: #fff; background: var(--espresso); padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.track .you::after { content: ""; width: 0; height: 0; border: 6px solid transparent; border-top-color: var(--espresso); }
+.milestone { position: absolute; top: 22px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; text-align: center; }
+.milestone .dot { width: 20px; height: 20px; border-radius: 50%; background: var(--paper); border: 3px solid #d2bea4; }
+.milestone.reached .dot { background: var(--caramel); border-color: var(--caramel); box-shadow: 0 0 0 4px rgba(180, 123, 71, 0.2); }
+.milestone .label { margin-top: 8px; font-size: 14px; white-space: nowrap; color: var(--espresso); }
+.milestone .label b { display: block; font-variant-numeric: tabular-nums; }
+.milestone .label small { display: block; font-size: 12px; color: var(--muted); }
+.milestone.reached .label small { color: var(--ok); font-weight: 700; }
+.track-legend { display: none; list-style: none; padding: 0; margin: 8px 0 0; }
+.track-next { margin: 14px 0 4px; font-size: 16px; }
+.track-tier { margin: 0; color: var(--muted); font-size: 14px; }
 
 /* favorites */
 .row-line.fav img { width: 48px; height: 48px; }
@@ -940,9 +955,15 @@ body { font-family: var(--text); color: var(--espresso); min-height: 100vh; disp
 .vegan-chip[aria-pressed="true"] { background: var(--ok); color: #fff; }
 .tier-line { margin-top: 6px; color: var(--ok); font-weight: 600; }
 @media (max-width: 760px) {
-  .loyalty-row { grid-template-columns: 1fr; gap: 0; }
   .usual-name { font-size: 28px; }
-  .stamps { gap: 4px; }
+  .points-track { padding: 22px 18px 18px; }
+  .points-now strong { font-size: 36px; }
+  .track { height: 48px; margin: 26px 10px 0; }
+  .milestone .label { display: none; }
+  .track-legend { display: grid; gap: 4px; font-size: 14px; }
+  .track-legend li::before { content: "○ "; color: #c9b296; }
+  .track-legend li.reached::before { content: "● "; color: var(--caramel); }
+  .track-legend li.reached { color: var(--ok); font-weight: 600; }
   .form-cafe label.check { margin-top: 12px; }
   #ready-banner { top: 72px; }
   .menu-bar .vegan-chip { padding: 7px 10px; }

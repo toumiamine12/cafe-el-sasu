@@ -132,7 +132,7 @@ export function createApp(db) {
   const requireRole = (...roles) => (req, res, next) => {
     if (!req.user) return res.status(401).json({ error: 'Bitte einloggen' });
     // A temporary password (set by the owner) unlocks nothing until the employee chooses their own.
-    if (req.user.must_change_password) return res.status(403).json({ error: 'Bitte zuerst dein eigenes Passwort festlegen' });
+    if (req.user.must_change_password) return res.status(403).json({ error: 'Bitte legen Sie zuerst Ihr eigenes Passwort fest' });
     if (roles.length && !roles.includes(req.user.role)) return res.status(403).json({ error: 'Kein Zugriff' });
     next();
   };
@@ -167,7 +167,7 @@ export function createApp(db) {
       limiter.fail(keys);
       fail(401, 'Mitgliedsnummer/E-Mail oder Passwort falsch');
     }
-    if (!user.active) fail(403, 'Dieses Konto ist deaktiviert. Bitte wende dich an die Inhaberin.');
+    if (!user.active) fail(403, 'Dieses Konto ist deaktiviert. Bitte wenden Sie sich an die Inhaberin.');
     limiter.reset(keys[1][0]);
     startSession(res, user.id);
     res.json(publicUser(user));
@@ -200,7 +200,7 @@ export function createApp(db) {
   const PROFILE_FIELDS = { name: checkName, email: checkEmail, birthday: (v) => v === null || checkBirthday(v), preferences: checkPrefs };
   app.patch('/api/me', loggedIn, (req, res) => {
     const fields = Object.entries(req.body);
-    if (!fields.length || fields.some(([k]) => !Object.hasOwn(PROFILE_FIELDS, k))) fail(400, 'Nur Name, E-Mail und Geburtstag sind änderbar');
+    if (!fields.length || fields.some(([k]) => !Object.hasOwn(PROFILE_FIELDS, k))) fail(400, 'Nur Name, E-Mail, Geburtstag und Vorlieben sind änderbar');
     for (const [k, v] of fields) PROFILE_FIELDS[k](v);
     const email = req.body.email?.trim();
     if (email && q('SELECT 1 FROM users WHERE email = ? AND id != ?').get(email, req.user.id)) fail(409, 'E-Mail ist bereits registriert');
@@ -320,7 +320,7 @@ export function createApp(db) {
   };
 
   app.post('/api/orders', customer, (req, res) => {
-    if (paused()) fail(503, 'Online-Bestellungen sind gerade pausiert. Bitte versuch es gleich noch einmal.');
+    if (paused()) fail(503, 'Online-Bestellungen sind gerade pausiert. Bitte versuchen Sie es gleich noch einmal.');
     const { items, pickup_at, reward_id, gift_code } = req.body;
     if (reward_id != null && gift_code != null) fail(400, 'Bitte entweder eine Prämie oder einen Gutschein einlösen');
     if (!Array.isArray(items) || !items.length || items.length > 30) fail(400, 'Warenkorb ist leer');
@@ -344,7 +344,7 @@ export function createApp(db) {
 
     const order = tx(db, () => {
       // Counted inside the write transaction, so two guests can't both take the last place.
-      if (bookedIn(pickup) >= capacity()) fail(409, 'Dieses Abholfenster ist ausgebucht. Bitte wähle eine andere Zeit.');
+      if (bookedIn(pickup) >= capacity()) fail(409, 'Dieses Abholfenster ist ausgebucht. Bitte wählen Sie eine andere Zeit.');
       const user = q('SELECT * FROM users WHERE id = ?').get(req.user.id);
       let reward = null;
       if (reward_id != null) {
@@ -356,7 +356,7 @@ export function createApp(db) {
       if (gift_code != null) {
         gift = q("SELECT * FROM gifts WHERE code = ? AND status = 'active'").get(String(gift_code).trim().toUpperCase());
         if (!gift) fail(400, 'Gutschein ist nicht gültig oder schon eingelöst');
-        if (gift.sender_id === user.id) fail(400, 'Eigene Gutscheine kannst du verschenken, aber nicht selbst einlösen');
+        if (gift.sender_id === user.id) fail(400, 'Eigene Gutscheine können Sie verschenken, aber nicht selbst einlösen');
       }
       let price;
       try {
@@ -502,7 +502,7 @@ export function createApp(db) {
     if (!['points', 'counter'].includes(pay)) fail(400, 'Bezahlen mit Punkten oder an der Theke');
     const gift = tx(db, () => {
       if (pay === 'points') {
-        if (q('SELECT points FROM users WHERE id = ?').get(req.user.id).points < GIFT_POINTS) fail(400, `Dafür brauchst du ${GIFT_POINTS} Punkte`);
+        if (q('SELECT points FROM users WHERE id = ?').get(req.user.id).points < GIFT_POINTS) fail(400, `Dafür benötigen Sie ${GIFT_POINTS} Punkte`);
         q('UPDATE users SET points = points - ? WHERE id = ?').run(GIFT_POINTS, req.user.id);
       }
       const { lastInsertRowid } = q(`INSERT INTO gifts (code, sender_id, recipient_name, message, pay, points_cost, status) VALUES (?, ?, ?, ?, ?, ?, ?)`)
@@ -616,7 +616,7 @@ export function createApp(db) {
   app.post('/api/admin/shifts/break', staff, (req, res) => {
     const onBreak = tx(db, () => {
       const sh = q('SELECT id FROM shifts WHERE user_id = ? AND clock_out IS NULL').get(req.user.id);
-      if (!sh) fail(409, 'Du bist nicht eingestempelt');
+      if (!sh) fail(409, 'Sie sind nicht eingestempelt');
       const open = q('SELECT id FROM shift_breaks WHERE shift_id = ? AND end IS NULL').get(sh.id);
       const now = new Date().toISOString();
       if (open) q('UPDATE shift_breaks SET end = ? WHERE id = ?').run(now, open.id);
@@ -847,7 +847,7 @@ export function createApp(db) {
     if (!fields.length || fields.some((k) => !['hourly_wage', 'active'].includes(k))) fail(400, 'Nur Stundenlohn und Aktiv sind änderbar');
     if ('hourly_wage' in req.body) checkWage(req.body.hourly_wage);
     if ('active' in req.body && ![0, 1].includes(req.body.active)) fail(400, 'active muss 0 oder 1 sein');
-    if (id === req.user.id && req.body.active === 0) fail(400, 'Du kannst dein eigenes Konto nicht deaktivieren');
+    if (id === req.user.id && req.body.active === 0) fail(400, 'Sie können Ihr eigenes Konto nicht deaktivieren');
     const updated = tx(db, () => {
       const u = q("SELECT * FROM users WHERE id = ? AND role IN ('staff','admin')").get(id);
       if (!u) fail(404, 'Mitarbeiter nicht gefunden');

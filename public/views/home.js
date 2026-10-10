@@ -20,7 +20,7 @@ export default {
         ? `<span class="dot open"></span>Jetzt geöffnet · bis ${time} Uhr`
         : `<span class="dot"></span>Gerade geschlossen${change ? ` · öffnet ${at(change)}` : ''}`;
       $('next-pickup').textContent = s.orders_paused
-        ? 'Online-Bestellungen sind gerade pausiert – vor Ort sind wir für dich da.'
+        ? 'Online-Bestellungen sind gerade pausiert – vor Ort sind wir für Sie da.'
         : `Früheste Abholung: ${at(new Date(s.next_pickup))}`;
     }).catch(() => { if (alive()) $('live-status').textContent = 'Di – Fr 11 – 22 Uhr · Sa – So 10 – 24 Uhr'; });
 
@@ -46,11 +46,11 @@ export default {
       return;
     }
     $('loyalty-sub').textContent = user.birthday_week
-      ? `Alles Gute zum Geburtstag, ${user.name.split(' ')[0]}! Dein Geburtstagskaffee wartet im Warenkorb.`
-      : `Du bist ${user.tier.name}-Mitglied mit ${user.points} Punkten.`;
+      ? `Alles Gute zum Geburtstag, ${user.name}! Ihr Geburtstagskaffee wartet im Warenkorb.`
+      : `Sie sind ${user.tier.name}-Mitglied mit ${user.points} Punkten.`;
     $('loyalty-cta').innerHTML = user.tier.next
-      ? `<a class="btn-cafe" href="#/konto">Noch ${user.tier.next - user.lifetime_points} Punkte bis ${user.tier.name === 'Bronze' ? 'Silver' : 'Gold'} – zu deinem Konto</a>`
-      : '<a class="btn-cafe" href="#/konto">Zu deinem Konto</a>';
+      ? `<a class="btn-cafe" href="#/konto">Noch ${user.tier.next - user.lifetime_points} Punkte bis ${user.tier.name === 'Bronze' ? 'Silver' : 'Gold'} – zu Ihrem Konto</a>`
+      : '<a class="btn-cafe" href="#/konto">Zu Ihrem Konto</a>';
     root.querySelector(`.tier-col.${user.tier.name}`)?.classList.add('mine');
     const last = (await api('/api/orders').catch(() => [])).find((o) => o.status !== 'cancelled');
     if (!alive()) return;

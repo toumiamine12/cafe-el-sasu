@@ -210,7 +210,7 @@ document.addEventListener('click', async (e) => {
     closeUserMenu();
     await api('/api/logout', { method: 'POST' });
     await session.refresh();
-    toast('Du bist ausgeloggt. Bis bald!');
+    toast('Sie sind abgemeldet. Bis bald!');
     // Go home; if we're already there, ask the router to redraw for the logged-out state.
     if (location.hash && location.hash !== '#/') location.hash = '#/';
     else dispatchEvent(new Event('sessionchange'));
@@ -254,7 +254,7 @@ function showReady(ready) {
     });
   }
   bar.dataset.ids = JSON.stringify(ready.map((o) => o.id));
-  bar.innerHTML = `<strong>Dein Kaffee ist ready!</strong> <span>${esc(orderName(ready[0]))} – Express-Abholung am Tresen.</span>
+  bar.innerHTML = `<strong>Ihr Kaffee ist ready!</strong> <span>${esc(orderName(ready[0]))} – Express-Abholung am Tresen.</span>
     <button type="button" data-dismiss aria-label="Hinweis schließen">×</button>`;
 }
 

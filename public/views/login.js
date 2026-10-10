@@ -19,7 +19,7 @@ export default {
     const user = await session.get();
     if (!alive()) return;
     if (user) {
-      $('auth-hello').textContent = `Hallo, ${user.name.split(' ')[0]}`;
+      $('auth-hello').textContent = `Guten Tag, ${user.name}`;
       $('login-panel').hidden = true;
       $('logged-in').hidden = false;
       $('logged-in-as').innerHTML = `Eingeloggt als <strong>${esc(user.name)}</strong> (${ROLE_LABEL[user.role]}, ${esc(user.member_id)}).`;
@@ -34,7 +34,7 @@ export default {
       $('register-fields').hidden = !register;
       $('login-fields').hidden = register;
       $('form-title').textContent = $('submit').textContent = register ? 'Mitglied werden' : 'Einloggen';
-      $('auth-hello').textContent = register ? 'Schön, dich kennenzulernen' : 'Willkommen zurück';
+      $('auth-hello').textContent = register ? 'Schön, Sie kennenzulernen' : 'Willkommen zurück';
       $('password').autocomplete = register ? 'new-password' : 'current-password';
       $('error').textContent = '';
       $(register ? 'name' : 'id').focus();

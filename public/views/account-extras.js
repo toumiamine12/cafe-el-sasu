@@ -27,7 +27,7 @@ export function mountBeans(root, alive) {
           ${b.status === 'active' ? `<button class="btn-ghost" data-bean="${b.id}" data-action="skip">Einmal aussetzen</button><button class="btn-ghost" data-bean="${b.id}" data-action="pause">Pausieren</button>`
             : `<button class="btn-ghost" data-bean="${b.id}" data-action="resume">Fortsetzen</button>`}
           <button class="btn-ghost danger" data-bean="${b.id}" data-action="cancel">Beenden</button></div>`}
-      </div>`).join('') : '<p class="muted">Noch kein Abo. Wähle oben Sorte, Größe und Rhythmus.</p>';
+      </div>`).join('') : '<p class="muted">Noch kein Abo. Wählen Sie oben Sorte, Größe und Rhythmus.</p>';
   }
 
   $('bean-form').addEventListener('submit', async (e) => {
@@ -37,7 +37,7 @@ export function mountBeans(root, alive) {
       await api('/api/me/beans', { method: 'POST', body: {
         bean: $('bn-bean').value, size: $('bn-size').value, every_weeks: Number($('bn-every').value), first_pickup: $('bn-first').value,
       } });
-      toast('Abo gestartet – wir legen dir die Bohnen zurück');
+      toast('Abo gestartet – wir legen Ihnen die Bohnen zurück');
       load();
     } catch (err) { $('bn-error').textContent = err.message; }
   });
@@ -59,21 +59,21 @@ export function mountGifts(root, alive, getUser, onPointsChange) {
   let gifts = [];
   const link = (code) => `${location.origin}/#/gutschein?c=${code}`;
 
-  const showPoints = () => { $('gf-points').textContent = `(du hast ${getUser().points})`; };
+  const showPoints = () => { $('gf-points').textContent = `(Sie haben ${getUser().points})`; };
 
   function showMade(g) {
     const url = link(g.code);
-    const text = `${g.message ? g.message + ' – ' : ''}Ich lade dich auf einen Kaffee im Café el Sasu ein: ${url}`;
+    const text = `${g.message ? g.message + ' – ' : ''}Einladung auf einen Kaffee im Café el Sasu: ${url}`;
     $('gift-made').hidden = false;
     $('gift-made').innerHTML = `
       <img src="/api/gifts/${esc(g.code)}/qr" alt="QR-Code des Gutscheins" width="140" height="140" />
       <div class="grow">
         <strong>Gutschein für ${esc(g.recipient_name)}</strong>
-        <p class="muted">${g.status === 'pending' ? 'Bezahl 5,00 € an der Theke – dann ist er sofort einlösbar.' : 'Bereit! Schick den Link oder zeig den QR-Code.'}</p>
+        <p class="muted">${g.status === 'pending' ? 'Bezahlen Sie 5,00 € an der Theke – dann ist er sofort einlösbar.' : 'Bereit! Schicken Sie den Link oder zeigen Sie den QR-Code.'}</p>
         <input class="share-link" value="${esc(url)}" readonly aria-label="Gutschein-Link" />
         <div class="buttons">
           <a class="btn-cafe" href="https://wa.me/?text=${encodeURIComponent(text)}" target="_blank" rel="noopener">WhatsApp</a>
-          <a class="btn-ghost" href="mailto:?subject=${encodeURIComponent('Ein Kaffee für dich')}&body=${encodeURIComponent(text)}">E-Mail</a>
+          <a class="btn-ghost" href="mailto:?subject=${encodeURIComponent('Ein Kaffee-Gutschein vom Café el Sasu')}&body=${encodeURIComponent(text)}">E-Mail</a>
           <button class="btn-ghost" type="button" id="gift-copy">Link kopieren</button>
         </div>
       </div>`;
@@ -91,7 +91,7 @@ export function mountGifts(root, alive, getUser, onPointsChange) {
         <div class="grow"><strong>Für ${esc(g.recipient_name)}</strong> <span class="muted">${esc(g.code)}</span><br />
           <span class="status ${g.status === 'active' ? 'ready' : g.status === 'cancelled' ? 'cancelled' : ''}">${GIFT_STATE[g.status]}</span></div>
         ${['pending', 'active'].includes(g.status) ? `<button class="btn-ghost" data-show="${esc(g.code)}">Teilen</button><button class="btn-ghost danger" data-cancel-gift="${esc(g.code)}">Stornieren</button>` : ''}
-      </div>`).join('') : '<p class="muted">Du hast noch keinen Kaffee verschenkt.</p>';
+      </div>`).join('') : '<p class="muted">Sie haben noch keinen Kaffee verschenkt.</p>';
   }
 
   $('gift-form').addEventListener('submit', async (e) => {

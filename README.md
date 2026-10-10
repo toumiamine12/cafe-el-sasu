@@ -38,7 +38,7 @@ Built with **Node.js, Express and SQLite** (`node:sqlite`). The frontend is plai
 
 **Live order pulse**
 - Progress bar Eingegangen → In Zubereitung → Abholbereit with a countdown to pickup
-- "Dein Kaffee ist ready!" banner on every page the moment an order is ready
+- "Ihr Kaffee ist ready!" banner on every page the moment an order is ready
 
 **Bean subscription & gifts**
 - Bohnen-Abo: whole beans (Espresso, Filter, Decaf; 250 g / 1 kg) reserved every 1, 2 or 4 weeks for pickup; pause, skip or cancel; staff see what's due
@@ -48,7 +48,7 @@ Built with **Node.js, Express and SQLite** (`node:sqlite`). The frontend is plai
 - 1 point per €1, credited when the order is picked up
 - Tiers by lifetime points: **Bronze** → **Silver** (200, 5 % off) → **Gold** (500, 10 % off)
 - Rewards: free pastry (50), free coffee (100), free cake (250), birthday coffee for every member during their birthday week (with a banner)
-- Treuepass: stamp card towards the next reward ("noch etwa 3 Bestellungen bis Gratis Kuchen"); tier card with the discount that's applied automatically
+- Prämien-Strecke: one progress track with every reward as a milestone and a "Sie: 140" marker, the tier badge and its automatic discount in the same card
 - "Karte aufs Handy": the member card with QR as a phone-sized image, and the site can be added to the home screen (web app manifest). Real Apple/Google Wallet passes need paid developer accounts and aren't included
 - Redeeming never drops your tier; cancelling refunds the reward points
 

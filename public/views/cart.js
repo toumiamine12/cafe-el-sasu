@@ -16,7 +16,7 @@ export default {
       const lines = cart.get().map((l) => ({ ...l, item: menu.find((m) => m.id === l.id) })).filter((l) => l.item);
       $('checkout').hidden = !lines.length;
       if (!lines.length) {
-        $('cart-lines').innerHTML = '<p class="muted">Dein Warenkorb ist leer. <a href="#/speisekarte">Zur Speisekarte</a></p>';
+        $('cart-lines').innerHTML = '<p class="muted">Ihr Warenkorb ist leer. <a href="#/speisekarte">Zur Speisekarte</a></p>';
         $('totals').innerHTML = '';
         return;
       }
@@ -80,7 +80,7 @@ export default {
     const [slots, rewards, status] = await Promise.all([api('/api/pickup-availability'), api('/api/rewards'), api('/api/status')]);
     if (!alive()) return;
     if (status.orders_paused) {
-      $('error').textContent = 'Online-Bestellungen sind gerade pausiert. Bitte versuch es in ein paar Minuten noch einmal.';
+      $('error').textContent = 'Online-Bestellungen sind gerade pausiert. Bitte versuchen Sie es in ein paar Minuten noch einmal.';
       $('place').disabled = true;
     }
     // Full 15-minute windows stay visible but can't be picked.
@@ -101,7 +101,7 @@ export default {
     $('gift-code').addEventListener('input', syncGift);
     syncGift();
     $('discount-note').textContent = user.tier.discountPct
-      ? `Als ${user.tier.name}-Mitglied bekommst du ${user.tier.discountPct}% Rabatt.`
-      : `Du hast ${user.points} Punkte. Ab 200 Punkten gibt's 5% Rabatt.`;
+      ? `Als ${user.tier.name}-Mitglied erhalten Sie ${user.tier.discountPct} % Rabatt.`
+      : `Sie haben ${user.points} Punkte. Ab 200 Punkten erhalten Sie 5 % Rabatt.`;
   },
 };

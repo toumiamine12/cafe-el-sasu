@@ -70,8 +70,8 @@
       <div class="home-inner">
         <h2 class="home-title">So funktioniert's</h2>
         <ol class="steps">
-          <li><h3>Online bestellen</h3><p>Such dir Kaffee und Kuchen aus und wähl eine Abholzeit – frühestens in 15 Minuten.</p></li>
-          <li><h3>Wir bereiten zu</h3><p>Du siehst live in deinem Konto, wann deine Bestellung in Arbeit und abholbereit ist.</p></li>
+          <li><h3>Online bestellen</h3><p>Suchen Sie sich Kaffee und Kuchen aus und wählen Sie eine Abholzeit – frühestens in 15 Minuten.</p></li>
+          <li><h3>Wir bereiten zu</h3><p>Sie sehen live in Ihrem Konto, wann Ihre Bestellung in Arbeit und abholbereit ist.</p></li>
           <li><h3>Abholen &amp; Punkte sammeln</h3><p>Ohne Warten abholen, an der Theke bezahlen. Für jeden Euro gibt's einen Punkt.</p></li>
         </ol>
       </div>
@@ -82,7 +82,7 @@
         <h2 class="home-title">Treueprogramm</h2>
         <p class="home-sub" id="loyalty-sub">Kostenlos Mitglied werden, Punkte sammeln, gratis genießen.</p>
         <div class="tiers">
-          <div class="tier-col Bronze"><h3>Bronze</h3><p class="need">ab 0 Punkten</p><ul><li>1 Punkt pro Euro</li><li>Gratis Gebäck ab 50 Punkten</li><li>Gratis Kaffee ab 100 Punkten</li><li>Gratis Kaffee in deiner Geburtstagswoche</li></ul></div>
+          <div class="tier-col Bronze"><h3>Bronze</h3><p class="need">ab 0 Punkten</p><ul><li>1 Punkt pro Euro</li><li>Gratis Gebäck ab 50 Punkten</li><li>Gratis Kaffee ab 100 Punkten</li><li>Gratis Kaffee in Ihrer Geburtstagswoche</li></ul></div>
           <div class="tier-col Silver"><h3>Silver</h3><p class="need">ab 200 Punkten</p><ul><li>5 % Rabatt auf jede Bestellung</li><li>Gratis Kuchen ab 250 Punkten</li></ul></div>
           <div class="tier-col Gold"><h3>Gold</h3><p class="need">ab 500 Punkten</p><ul><li>10 % Rabatt auf jede Bestellung</li><li>Alles aus Bronze und Silver</li></ul></div>
         </div>
@@ -170,7 +170,7 @@
     <template id="tpl-warenkorb">
       <div class="page">
       <section class="panel">
-        <h2>Dein Warenkorb</h2>
+        <h2>Ihr Warenkorb</h2>
         <div id="cart-lines" aria-live="polite"></div>
         <div class="totals" id="totals"></div>
       </section>
@@ -196,7 +196,7 @@
         <aside class="auth-photo">
           <img src="photos/logo.png" alt="" width="56" height="56" />
           <h1 id="auth-hello">Willkommen zurück</h1>
-          <p>Schön, dass du da bist. Dein Kaffee wartet schon.</p>
+          <p>Schön, dass Sie da sind. Ihr Kaffee wartet schon.</p>
           <ul class="perks">
             <li>1 Punkt für jeden Euro</li>
             <li>Gratis-Kaffee ab 100 Punkten</li>
@@ -206,7 +206,7 @@
 
         <div class="auth-card">
           <section id="logged-in" hidden>
-            <h2>Du bist eingeloggt</h2>
+            <h2>Sie sind eingeloggt</h2>
             <p id="logged-in-as"></p>
             <p class="login-actions"><a class="btn-cafe" id="continue" href="#/konto">Weiter</a></p>
           </section>
@@ -257,10 +257,10 @@
           <button class="btn-light card-save" type="button" id="card-save">Karte aufs Handy</button>
         </div>
         <dialog class="qr-dialog" id="qr-dialog" aria-labelledby="qr-title">
-          <h2 id="qr-title">Deine Mitgliedskarte</h2>
+          <h2 id="qr-title">Ihre Mitgliedskarte</h2>
           <img src="/api/me/qr" alt="" width="240" height="240" />
           <p class="mid" id="qr-mid"></p>
-          <p class="muted">Zeig den Code an der Theke – wir buchen deine Punkte darauf.</p>
+          <p class="muted">Zeigen Sie den Code an der Theke – wir buchen Ihre Punkte darauf.</p>
           <button class="btn-cafe" type="button" id="qr-close">Schließen</button>
         </dialog>
       </div>
@@ -279,20 +279,12 @@
         <div class="bday-banner" id="bday-banner" hidden></div>
         <div id="pulse" aria-live="polite"></div>
         <div class="usual" id="usual" hidden></div>
-        <div class="loyalty-row">
-          <div class="panel pass" id="pass"></div>
-          <div class="panel tier-card" id="tier-card"></div>
-        </div>
+        <section class="panel points-track" id="pass" aria-label="Ihre Treuepunkte"></section>
         <div class="panel" id="fav-panel">
-          <h2>Deine Favoriten</h2>
+          <h2>Ihre Favoriten</h2>
           <div id="favorites"></div>
         </div>
         <div class="stats" id="stats"></div>
-        <div class="panel">
-          <h2>Prämien</h2>
-          <p class="muted">1 Punkt pro Euro, gutgeschrieben bei Abholung. Einlösen kannst du Prämien im Warenkorb.</p>
-          <div id="rewards"></div>
-        </div>
       </section>
 
       <section role="tabpanel" id="orders" aria-labelledby="tab-orders" hidden>
@@ -305,7 +297,7 @@
       <section role="tabpanel" id="beans" aria-labelledby="tab-beans" hidden>
         <div class="panel">
           <h2>Bohnen-Abo</h2>
-          <p class="muted">Frisch geröstete ganze Bohnen, regelmäßig für dich zurückgelegt. Abholen und bezahlen im Café – jederzeit pausieren, überspringen oder beenden.</p>
+          <p class="muted">Frisch geröstete ganze Bohnen, regelmäßig für Sie zurückgelegt. Abholen und bezahlen im Café – jederzeit pausieren, überspringen oder beenden.</p>
           <form id="bean-form" class="form-cafe bean-form">
             <div><label for="bn-bean">Sorte</label>
               <select id="bn-bean"><option value="espresso">Espresso-Röstung</option><option value="filter">Filter-Röstung</option><option value="decaf">Entkoffeiniert</option></select></div>
@@ -323,7 +315,7 @@
       <section role="tabpanel" id="gifts" aria-labelledby="tab-gifts" hidden>
         <div class="panel">
           <h2>Kaffee verschenken</h2>
-          <p class="muted">Schick jemandem einen Kaffee nach Wahl – per Link oder QR-Code über WhatsApp oder E-Mail.</p>
+          <p class="muted">Schenken Sie jemandem einen Kaffee nach Wahl – per Link oder QR-Code über WhatsApp oder E-Mail.</p>
           <form id="gift-form" class="form-cafe">
             <div class="form-row">
               <div><label for="gf-name">Für wen?</label><input id="gf-name" maxlength="40" required placeholder="Vorname" /></div>
@@ -337,7 +329,7 @@
             <button class="btn-cafe" type="submit">Gutschein erstellen</button>
           </form>
           <div class="gift-made" id="gift-made" hidden></div>
-          <h3>Deine Gutscheine</h3>
+          <h3>Ihre Gutscheine</h3>
           <div id="gift-list"></div>
         </div>
       </section>
@@ -553,7 +545,7 @@
       <div class="page" style="max-width:480px">
         <section class="panel">
           <h2>Eigenes Passwort festlegen</h2>
-          <p class="muted">Dein Konto wurde mit einem vorläufigen Passwort angelegt. Bitte lege jetzt dein eigenes fest.</p>
+          <p class="muted">Ihr Konto wurde mit einem vorläufigen Passwort angelegt. Bitte legen Sie jetzt Ihr eigenes fest.</p>
           <form id="pw-form" class="form-cafe">
             <label for="pw-old">Vorläufiges Passwort</label>
             <input id="pw-old" type="password" autocomplete="current-password" required />

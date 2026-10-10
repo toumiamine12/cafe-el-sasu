@@ -121,7 +121,7 @@ export default {
         await api('/api/me/favorites', { method: 'POST', body: { menu_item_id: current.id, mods: chosenMods() } });
         $('dlg-fav').textContent = '★';
         $('dlg-fav').classList.add('on');
-        toast('Als Favorit gespeichert – in deinem Konto mit einem Klick bestellbar');
+        toast('Als Favorit gespeichert – in Ihrem Konto mit einem Klick bestellbar');
       } catch (err) { toast(err.message); }
     });
     $('item-dialog').addEventListener('click', (e) => { if (e.target === e.currentTarget) e.currentTarget.close(); });
