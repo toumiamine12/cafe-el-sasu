@@ -2,9 +2,10 @@ import express from 'express';
 import QRCode from 'qrcode';
 import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { hashPassword, verifyPassword, tx } from './db.js';
+import { hashPassword, verifyPassword, tx, newUsername } from './db.js';
 import { tierFor, isOpenAt, validatePickup, priceOrder, pointsFor, nextChange, validateModifiers, slotStart, SLOT_CAPACITY, netMinutes, breakShortfall, payCents,
-  inBirthdayWeek, usualCombo, usualTime, BEAN_PRICES, addWeeks, birthdayTreatOpen } from './rules.js';
+  inBirthdayWeek, usualCombo, usualTime, BEAN_PRICES, addWeeks, birthdayTreatOpen,
+  berlinTime, vatSplit, businessInsights } from './rules.js';
 
 const SESSION_DAYS = 30;
 const PUBLIC = fileURLToPath(new URL('../public', import.meta.url));
@@ -150,8 +151,8 @@ export function createApp(db) {
     if (birthday) checkBirthday(birthday);
     if (q('SELECT 1 FROM users WHERE email = ?').get(email)) fail(409, 'E-Mail ist bereits registriert');
     const user = tx(db, () => {
-      const { lastInsertRowid } = q('INSERT INTO users (member_id, name, email, password_hash, birthday, birthday_changed_at) VALUES (?, ?, ?, ?, ?, ?)')
-        .run(nextMemberId(), name.trim(), email.trim(), hashPassword(password), birthday || null, birthday ? new Date().toISOString() : null);
+      const { lastInsertRowid } = q('INSERT INTO users (member_id, name, email, password_hash, birthday, birthday_changed_at, username) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        .run(nextMemberId(), name.trim(), email.trim(), hashPassword(password), birthday || null, birthday ? new Date().toISOString() : null, newUsername(db, name.trim()));
       return q('SELECT * FROM users WHERE id = ?').get(lastInsertRowid);
     });
     startSession(res, user.id);
@@ -160,7 +161,8 @@ export function createApp(db) {
 
   app.post('/api/login', (req, res) => {
     const { id, password } = req.body;
-    const user = typeof id === 'string' && q('SELECT * FROM users WHERE member_id = ? OR email = ?').get(id.trim().toUpperCase(), id.trim());
+    // Member ID, e-mail or username (vorname.nachname1234) — all case-insensitive.
+    const user = typeof id === 'string' && q('SELECT * FROM users WHERE member_id = ? OR email = ? OR username = ?').get(id.trim().toUpperCase(), id.trim(), id.trim().toLowerCase());
     const keys = [[`ip:${req.ip}`, 20], [`acct:${user ? user.id : String(id).trim().toLowerCase()}`, 5]];
     if (limiter.blocked(keys)) fail(429, 'Zu viele Fehlversuche. Bitte in 15 Minuten erneut versuchen.');
     if (!user || typeof password !== 'string' || !verifyPassword(password, user.password_hash)) {
@@ -793,6 +795,8 @@ export function createApp(db) {
       const b = q("SELECT * FROM bean_subscriptions WHERE id = ? AND status = 'active'").get(Number(req.params.id));
       if (!b) fail(409, 'Kein aktives Abo');
       q('UPDATE bean_subscriptions SET next_pickup = ? WHERE id = ?').run(addWeeks(b.next_pickup, b.every_weeks), b.id);
+      q('INSERT INTO bean_sales (subscription_id, user_id, bean, size, price_cents, at) VALUES (?, ?, ?, ?, ?, ?)')
+        .run(b.id, b.user_id, b.bean, b.size, BEAN_PRICES[b.bean][b.size], new Date().toISOString()); // counts as revenue
       return q('SELECT * FROM bean_subscriptions WHERE id = ?').get(b.id);
     });
     res.json(beanView(row));
@@ -834,8 +838,8 @@ export function createApp(db) {
     checkWage(hourly_wage);
     if (q('SELECT 1 FROM users WHERE email = ?').get(email)) fail(409, 'E-Mail ist bereits registriert');
     const user = tx(db, () => {
-      const { lastInsertRowid } = q(`INSERT INTO users (member_id, name, email, password_hash, role, hourly_wage, must_change_password)
-        VALUES (?, ?, ?, ?, 'staff', ?, 1)`).run(nextMemberId(), name.trim(), email.trim(), hashPassword(password), hourly_wage);
+      const { lastInsertRowid } = q(`INSERT INTO users (member_id, name, email, password_hash, role, hourly_wage, must_change_password, username)
+        VALUES (?, ?, ?, ?, 'staff', ?, 1, ?)`).run(nextMemberId(), name.trim(), email.trim(), hashPassword(password), hourly_wage, newUsername(db, name.trim()));
       return q('SELECT * FROM users WHERE id = ?').get(lastInsertRowid);
     });
     res.status(201).json(staffRow(user));
@@ -878,6 +882,158 @@ export function createApp(db) {
       };
     });
     res.json({ shifts, totals });
+  });
+
+  // --- Finanzen analytics -------------------------------------------------------------------
+  const CAT_LABEL = { coffee: 'Kaffee', cold: 'Kaltgetränke', cake: 'Kuchen', pastry: 'Gebäck', beans: 'Kaffeebohnen' };
+  const FOOD = new Set(['cake', 'pastry', 'beans']); // 7 % VAT; drinks 19 %
+  const WEEKDAY = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
+  const WALKIN_EMAIL = 'gast@cafe-elsasu.de';
+  const berlinHourOf = (iso) => Number(new Date(iso).toLocaleString('en-US', { timeZone: 'Europe/Berlin', hour: 'numeric', hourCycle: 'h23' }));
+  const berlinDayOf = (iso) => new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Europe/Berlin' });
+  const plusDays = (date, n) => new Date(Date.parse(`${date}T12:00:00Z`) + n * 864e5).toISOString().slice(0, 10);
+  const isDate = (v) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && !isNaN(Date.parse(v)) && new Date(v).toISOString().startsWith(v);
+
+  // Split `total` into parts proportional to `weights`, rounding so the parts add up exactly.
+  function allocate(total, weights) {
+    const sum = weights.reduce((a, w) => a + w, 0);
+    if (!sum) return weights.map(() => 0);
+    const raw = weights.map((w) => (total * w) / sum);
+    const out = raw.map(Math.floor);
+    let left = total - out.reduce((a, x) => a + x, 0);
+    raw.map((r, i) => [r - Math.floor(r), i]).sort((a, b) => b[0] - a[0]).forEach(([, i]) => { if (left-- > 0) out[i]++; });
+    return out;
+  }
+
+  function parseRange(qs) {
+    const today = berlinToday();
+    let from, to;
+    if (qs.from || qs.to) {
+      ({ from, to } = qs);
+      if (!isDate(from) || !isDate(to) || to < from) fail(400, 'Zeitraum: from und to als JJJJ-MM-TT, from ≤ to');
+      if ((Date.parse(to) - Date.parse(from)) / 864e5 > 91) fail(400, 'Höchstens 92 Tage auf einmal');
+    } else {
+      const days = { day: 1, week: 7, month: 30 }[qs.range];
+      if (!days) fail(400, 'range: day, week oder month – oder from/to');
+      from = plusDays(today, 1 - days);
+      to = today;
+    }
+    const days = Math.round((Date.parse(to) - Date.parse(from)) / 864e5) + 1;
+    return { from, to, days, from_utc: berlinTime(from, 0).toISOString(), to_utc: berlinTime(plusDays(to, 1), 0).toISOString() };
+  }
+
+  function analytics(range) {
+    const { from_utc, to_utc } = range;
+    const orders = q(`SELECT o.*, u.email FROM orders o JOIN users u ON u.id = o.user_id
+      WHERE o.status = 'picked_up' AND o.pickup_at >= ? AND o.pickup_at < ?`).all(from_utc, to_utc);
+    const itemsOf = q(`SELECT oi.*, m.name, m.category FROM order_items oi JOIN menu_items m ON m.id = oi.menu_item_id WHERE oi.order_id = ?`);
+    const modsOf = q('SELECT name, group_name, price_cents FROM order_item_modifiers WHERE order_item_id = ?');
+    const beans = q('SELECT * FROM bean_sales WHERE at >= ? AND at < ?').all(from_utc, to_utc);
+    const shifts = q(`SELECT s.id, s.user_id, u.hourly_wage, s.clock_in, s.clock_out FROM shifts s JOIN users u ON u.id = s.user_id
+      WHERE s.clock_in >= ? AND s.clock_in < ?`).all(from_utc, to_utc).map((sh) => shiftDetail(sh));
+
+    // Per item line: what was actually paid (order discounts spread over the lines by value).
+    const lines = [];
+    for (const o of orders) {
+      const its = itemsOf.all(o.id);
+      const paid = allocate(o.total_cents, its.map((i) => i.unit_price_cents * i.qty));
+      its.forEach((i, k) => lines.push({ ...i, paid: paid[k], order: o, mods: modsOf.all(i.id) }));
+    }
+    const hourly = range.days === 1;
+    const bucket = (iso) => (hourly ? berlinHourOf(iso) : berlinDayOf(iso));
+    const keys = hourly ? Array.from({ length: 11 }, (_, i) => 9 + i) : Array.from({ length: range.days }, (_, i) => plusDays(range.from, i));
+    const timeline = keys.map((key) => ({ key, revenue_cents: 0, labor_cents: 0, orders: 0 }));
+    const slot = (key) => timeline.find((t) => t.key === key) ?? timeline[hourly ? (key < 9 ? 0 : timeline.length - 1) : 0];
+    for (const o of orders) { const t = slot(bucket(o.pickup_at)); t.revenue_cents += o.total_cents; t.orders++; }
+    for (const b of beans) slot(bucket(b.at)).revenue_cents += b.price_cents;
+    for (const sh of shifts) slot(bucket(sh.clock_in)).labor_cents += sh.pay_cents;
+
+    const gross = orders.reduce((a, o) => a + o.total_cents, 0) + beans.reduce((a, b) => a + b.price_cents, 0);
+    const labor = shifts.reduce((a, sh) => a + sh.pay_cents, 0);
+    const byCat = Object.fromEntries(Object.keys(CAT_LABEL).map((c) => [c, 0]));
+    for (const l of lines) byCat[l.category] += l.paid;
+    byCat.beans += beans.reduce((a, b) => a + b.price_cents, 0);
+
+    const perItem = new Map();
+    for (const l of lines) {
+      const it = perItem.get(l.menu_item_id) ?? { name: l.name, qty: 0, revenue_cents: 0 };
+      it.qty += l.qty;
+      it.revenue_cents += l.paid;
+      perItem.set(l.menu_item_id, it);
+    }
+    const slow = q('SELECT id, name FROM menu_items WHERE active = 1').all()
+      .map((m) => ({ name: m.name, qty: perItem.get(m.id)?.qty ?? 0 })).sort((a, b) => a.qty - b.qty || a.name.localeCompare(b.name)).slice(0, 5);
+    const mods = new Map();
+    let milkDrinks = 0, plant = 0;
+    for (const l of lines) {
+      for (const m of l.mods) {
+        if (m.group_name === 'Milch') { milkDrinks += l.qty; if (['Hafermilch', 'Mandelmilch'].includes(m.name)) plant += l.qty; }
+        if (!m.price_cents) continue;
+        const x = mods.get(m.name) ?? { name: m.name, count: 0, revenue_cents: 0 };
+        x.count += l.qty;
+        x.revenue_cents += m.price_cents * l.qty;
+        mods.set(m.name, x);
+      }
+    }
+    const weekdays = WEEKDAY.map((day) => ({ day, revenue_cents: 0 }));
+    for (const o of orders) weekdays[new Date(berlinTime(berlinDayOf(o.pickup_at), 12)).getUTCDay()].revenue_cents += o.total_cents;
+    const hours = Array.from({ length: 11 }, (_, i) => ({ hour: 9 + i, orders: orders.filter((o) => berlinHourOf(o.pickup_at) === 9 + i).length }));
+    const walkin = orders.filter((o) => o.email === WALKIN_EMAIL).length;
+    const ordersRevenue = orders.reduce((a, o) => a + o.total_cents, 0);
+    const result = {
+      range,
+      kpi: {
+        gross_cents: gross, labor_cents: labor, net_cents: gross - labor, labor_ratio: gross ? labor / gross : 0,
+        orders: orders.length, avg_ticket_cents: orders.length ? Math.round(ordersRevenue / orders.length) : 0,
+        discounts_cents: orders.reduce((a, o) => a + o.discount_cents, 0),
+        rewards: orders.filter((o) => o.reward_id).length, gifts: orders.filter((o) => o.gift_id).length,
+      },
+      timeline: timeline.map(({ key, ...t }) => ({ [hourly ? 'hour' : 'date']: key, ...t })),
+      hours,
+      categories: Object.entries(byCat).map(([c, cents]) => ({ category: c, label: CAT_LABEL[c], revenue_cents: cents, share: gross ? cents / gross : 0 })),
+      top_items: [...perItem.values()].sort((a, b) => b.revenue_cents - a.revenue_cents).slice(0, 10),
+      slow_items: slow,
+      modifiers: [...mods.values()].sort((a, b) => b.count - a.count).slice(0, 8),
+      plant_share: milkDrinks ? plant / milkDrinks : 0,
+      channels: { online: orders.length - walkin, walkin },
+      weekdays,
+      vat: vatSplit({
+        food: Object.entries(byCat).filter(([c]) => FOOD.has(c)).reduce((a, [, v]) => a + v, 0),
+        drinks: Object.entries(byCat).filter(([c]) => !FOOD.has(c)).reduce((a, [, v]) => a + v, 0),
+      }),
+    };
+    result.insights = businessInsights(result);
+    return result;
+  }
+
+  app.get('/api/admin/analytics', admin, (req, res) => res.json(analytics(parseRange(req.query))));
+
+  // "Tagesabschluss / Bericht": summary + one row per day, for Excel (; separated, decimal comma).
+  app.get('/api/admin/report.csv', admin, (req, res) => {
+    const range = parseRange(req.query);
+    const a = analytics(range);
+    const daily = range.days === 1 ? [{ date: range.from, revenue_cents: a.kpi.gross_cents, labor_cents: a.kpi.labor_cents, orders: a.kpi.orders }] : a.timeline;
+    const eur = (c) => (c / 100).toFixed(2).replace('.', ',');
+    const v = a.vat;
+    const rows = [
+      ['Zeitraum', `${range.from} bis ${range.to}`],
+      ['Brutto-Umsatz', eur(a.kpi.gross_cents)],
+      ['Netto-Umsatz', eur(v.reduced.net + v.standard.net), 'ohne MwSt'],
+      ['MwSt 7 %', eur(v.reduced.vat), 'Kuchen, Gebäck, Kaffeebohnen'],
+      ['MwSt 19 %', eur(v.standard.vat), 'Getränke'],
+      ['Personalkosten', eur(a.kpi.labor_cents)],
+      ['Personalkostenquote', `${Math.round(a.kpi.labor_ratio * 100)} %`],
+      ['Ergebnis', eur(a.kpi.net_cents), 'Umsatz minus Personalkosten'],
+      ['Bestellungen', a.kpi.orders],
+      ['Durchschnittlicher Bestellwert', eur(a.kpi.avg_ticket_cents)],
+      ['Rabatte & Prämien', eur(a.kpi.discounts_cents)],
+      ['Hinweis', 'MwSt-Aufteilung ist eine Schätzung – bitte mit dem Steuerberater abstimmen'],
+      [],
+      ['Datum', 'Umsatz', 'Personalkosten', 'Ergebnis', 'Bestellungen'],
+      ...daily.map((d) => [d.date, eur(d.revenue_cents), eur(d.labor_cents), eur(d.revenue_cents - d.labor_cents), d.orders]),
+    ];
+    res.type('text/csv; charset=utf-8').set('Content-Disposition', `attachment; filename="bericht-${range.from}-bis-${range.to}.csv"`)
+      .send('\uFEFF' + rows.map((r) => r.map(csvCell).join(';')).join('\r\n') + '\r\n');
   });
 
   // --- payroll export (CSV for the payroll office / Excel) -------------------------

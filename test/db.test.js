@@ -58,3 +58,17 @@ test('an older database without item options gets them on start', () => {
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('demo data: 5 orders in each state today, 5 bean subscriptions, usernames for everyone', () => {
+  const db = openDb(':memory:');
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Berlin' });
+  const count = (status) => db.prepare('SELECT COUNT(*) n FROM orders WHERE status = ? AND created_at >= ?').get(status, new Date(Date.now() - 864e5).toISOString()).n;
+  for (const st of ['new', 'preparing', 'ready']) assert.equal(count(st), 5, st);
+  assert.ok(count('picked_up') >= 5);
+  assert.ok(db.prepare("SELECT COUNT(*) n FROM order_item_modifiers").get().n > 0, 'demo orders carry options');
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM bean_subscriptions').get().n, 5);
+  assert.ok(db.prepare('SELECT COUNT(*) n FROM bean_sales').get().n > 0);
+  for (const u of db.prepare('SELECT name, username FROM users').all()) assert.match(u.username, /^[a-z0-9.-]+\d{4}$/, u.name);
+  assert.match(db.prepare("SELECT username FROM users WHERE member_id = 'SASU-1000'").get().username, /^leyla\.aksoy\d{4}$/);
+  assert.ok(today);
+});

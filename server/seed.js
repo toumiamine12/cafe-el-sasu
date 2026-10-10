@@ -1,7 +1,7 @@
 // Demo data so a fresh install has a full menu, accounts and some history.
 import { randomBytes } from 'node:crypto';
-import { hashPassword, tx } from './db.js';
-import { priceOrder, isOpenAt } from './rules.js';
+import { hashPassword, tx, newUsername } from './db.js';
+import { priceOrder, isOpenAt, berlinTime, validatePickup, BEAN_PRICES, addWeeks } from './rules.js';
 
 // [name, description, category, price_cents, photo, tags]
 const MENU = [
@@ -104,15 +104,6 @@ const USERS = [
   ['SASU-1006', 'Laufkundschaft', 'gast@cafe-elsasu.de', null, 'customer', 0, 0, 0, null],
 ];
 
-// UTC instant of a Berlin wall-clock hour on a date (handles summer/winter time).
-const berlinParts = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Berlin', hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
-function berlinTime(date, hour) {
-  const guess = new Date(Date.parse(`${date}T00:00:00Z`) + hour * 3600e3);
-  const p = Object.fromEntries(berlinParts.formatToParts(guess).map((x) => [x.type, Number(x.value)]));
-  const offset = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute) - guess.getTime();
-  return new Date(guess.getTime() - offset);
-}
-
 const daysAgo = (d, hour) => {
   const t = new Date(Date.now() - d * 864e5);
   t.setUTCHours(hour, 0, 0, 0);
@@ -154,9 +145,9 @@ export function seed(db) {
     const r = db.prepare('INSERT INTO rewards (name, cost_points, category_allowed, birthday_only) VALUES (?, ?, ?, ?)');
     for (const row of REWARDS) r.run(...row);
 
-    const u = db.prepare(`INSERT INTO users (member_id, name, email, password_hash, role, hourly_wage, lifetime_points, points, birthday)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-    for (const [mid, n, e, p, role, wage, life, pts, bd] of USERS) u.run(mid, n, e, p ? hashPassword(pw[p] ?? p) : 'x:x', role, wage, life, pts, bd);
+    const u = db.prepare(`INSERT INTO users (member_id, name, email, password_hash, role, hourly_wage, lifetime_points, points, birthday, username)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+    for (const [mid, n, e, p, role, wage, life, pts, bd] of USERS) u.run(mid, n, e, p ? hashPassword(pw[p] ?? p) : 'x:x', role, wage, life, pts, bd, newUsername(db, n));
 
     // A month of history: orders from the 3 demo customers, shifts for the 2 staff.
     // Demo customers get their tier discount, and every 4th day one of their orders redeems a matching reward.
@@ -206,5 +197,99 @@ export function seed(db) {
       plan.run(team[(2 * d + 1) % team.length], berlinTime(date, 14.5).toISOString(), berlinTime(date, 20.5).toISOString(), 'Spätschicht');
       if (weekend) plan.run(team[(2 * d + 2) % team.length], berlinTime(date, 11).toISOString(), berlinTime(date, 17).toISOString(), 'Wochenende');
     }
+
+    seedToday(db);
+    seedBeans(db);
   });
+}
+
+// --- today's demo service: 5 orders each Eingegangen / In Zubereitung / Abholbereit / Abgeholt --------
+const TODAY_ORDERS = [
+  // [member, [[item, qty, [options]]]]
+  ['SASU-1003', [['Flat White', 1, ['Hafermilch', 'Extra Shot']], ['Croissant', 1, []]]],
+  ['SASU-1004', [['Caramel Latte', 2, ['Mandelmilch']]]],
+  ['SASU-1005', [['Cappuccino', 1, ['Vanille']], ['Cheesecake', 1, []]]],
+  ['SASU-1006', [['Espresso', 2, []]]],
+  ['SASU-1003', [['Iced Caramel Macchiato', 1, ['Hafermilch', 'Viel Eis']]]],
+  ['SASU-1004', [['Chai Latte', 1, ['Laktosefrei']], ['Zimtschnecke', 1, []]]],
+  ['SASU-1005', [['Cortado', 1, ['Extra Shot']]]],
+  ['SASU-1006', [['Americano', 1, []], ['Schoko-Cookie', 2, []]]],
+  ['SASU-1003', [['Matcha Kaffee', 1, ['Hafermilch', 'Haselnuss']]]],
+  ['SASU-1004', [['Cold Brew', 1, ['Wenig Eis']], ['Vegan Brownie', 1, []]]],
+];
+
+function placeDemoOrder(db, memberId, lines, pickupAt, status, createdAt) {
+  const user = db.prepare('SELECT * FROM users WHERE member_id = ?').get(memberId);
+  const item = db.prepare('SELECT * FROM menu_items WHERE name = ?');
+  const option = db.prepare(`SELECT o.*, g.name group_name FROM modifier_options o JOIN modifier_groups g ON g.id = o.group_id
+    JOIN menu_item_modifier_groups l ON l.group_id = g.id WHERE l.menu_item_id = ? AND o.name = ?`);
+  const full = lines.map(([name, qty, opts]) => {
+    const m = item.get(name);
+    return { ...m, qty, mods: opts.map((o) => option.get(m.id, o)).filter(Boolean) };
+  });
+  const pct = user.lifetime_points >= 500 ? 10 : user.lifetime_points >= 200 ? 5 : 0;
+  const price = priceOrder(full, null, pct);
+  const orderId = db.prepare(`INSERT INTO orders (user_id, pickup_at, status, subtotal_cents, discount_cents, total_cents, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+    .run(user.id, pickupAt, status, price.subtotal, price.discount, price.total, createdAt).lastInsertRowid;
+  for (const l of full) {
+    const unit = l.price_cents + l.mods.reduce((a, o) => a + o.price_cents, 0);
+    const oi = db.prepare('INSERT INTO order_items (order_id, menu_item_id, qty, unit_price_cents) VALUES (?, ?, ?, ?)').run(orderId, l.id, l.qty, unit).lastInsertRowid;
+    for (const o of l.mods) db.prepare('INSERT INTO order_item_modifiers (order_item_id, option_id, group_name, name, price_cents) VALUES (?, ?, ?, ?, ?)').run(oi, o.id, o.group_name, o.name, o.price_cents);
+  }
+  return orderId;
+}
+
+function seedToday(db) {
+  const now = Date.now();
+  // upcoming pickups: the next 15 free slots, one order each (capacity stays fine)
+  const next = [];
+  for (let t = Math.ceil((now + 20 * 60e3) / 900e3) * 900e3; next.length < 15; t += 900e3) {
+    if (!validatePickup(new Date(t), new Date(now))) next.push(new Date(t).toISOString());
+  }
+  // already picked up: the last 5 opening-hour slots before now
+  const past = [];
+  for (let t = Math.floor(now / 900e3) * 900e3 - 900e3; past.length < 5; t -= 900e3) {
+    if (isOpenAt(new Date(t))) past.push(new Date(t).toISOString());
+  }
+  const lena = db.prepare("SELECT id FROM users WHERE member_id = 'SASU-1001'").get().id;
+  const event = db.prepare('INSERT INTO order_events (order_id, user_id, status, at) VALUES (?, ?, ?, ?)');
+  const plan = [
+    ...past.map((at) => ['picked_up', at]),
+    ...next.slice(0, 5).map((at) => ['ready', at]),
+    ...next.slice(5, 10).map((at) => ['preparing', at]),
+    ...next.slice(10, 15).map((at) => ['new', at]),
+  ];
+  plan.forEach(([status, at], i) => {
+    const [member, lines] = TODAY_ORDERS[i % TODAY_ORDERS.length];
+    const created = new Date(Math.min(now - 60e3 * (20 - i), Date.parse(at) - 20 * 60e3)).toISOString();
+    const id = placeDemoOrder(db, member, lines, at, status, created);
+    const steps = { preparing: ['preparing'], ready: ['preparing', 'ready'], picked_up: ['preparing', 'ready', 'picked_up'] }[status] ?? [];
+    steps.forEach((st, k) => event.run(id, lena, st, new Date(Date.parse(created) + (k + 1) * 4 * 60e3).toISOString()));
+  });
+}
+
+// --- 5 bean subscriptions with a month of handouts ------------------------------------------
+function seedBeans(db) {
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Berlin' });
+  const id = (m) => db.prepare('SELECT id FROM users WHERE member_id = ?').get(m).id;
+  const subs = [
+    ['SASU-1003', 'espresso', '250g', 2, 2, 'active'],
+    ['SASU-1004', 'filter', '1kg', 4, 5, 'active'],
+    ['SASU-1005', 'decaf', '250g', 1, 1, 'active'],
+    ['SASU-1005', 'espresso', '1kg', 2, 9, 'active'],
+    ['SASU-1004', 'espresso', '250g', 2, 3, 'paused'],
+  ];
+  const ins = db.prepare('INSERT INTO bean_subscriptions (user_id, bean, size, every_weeks, next_pickup, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)');
+  const sale = db.prepare('INSERT INTO bean_sales (subscription_id, user_id, bean, size, price_cents, at) VALUES (?, ?, ?, ?, ?, ?)');
+  for (const [member, bean, size, every, inDays, status] of subs) {
+    const next = addWeeks(today, 0).slice(0, 10);
+    const nextPickup = new Date(Date.parse(`${next}T00:00:00Z`) + inDays * 864e5).toISOString().slice(0, 10);
+    const uid = id(member);
+    const subId = ins.run(uid, bean, size, every, nextPickup, status, new Date(Date.now() - 40 * 864e5).toISOString()).lastInsertRowid;
+    // handouts in the past, one per interval, within the last 30 days
+    for (let back = every * 7 - inDays; back <= 30; back += every * 7) {
+      if (back <= 0) continue;
+      sale.run(subId, uid, bean, size, BEAN_PRICES[bean][size], berlinTime(new Date(Date.now() - back * 864e5).toISOString().slice(0, 10), 10).toISOString());
+    }
+  }
 }

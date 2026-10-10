@@ -1,8 +1,9 @@
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { scryptSync, randomBytes, timingSafeEqual } from 'node:crypto';
+import { scryptSync, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import { seed, seedModifiers, tagPlantMilk } from './seed.js';
+import { usernameBase } from './rules.js';
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS users (
@@ -144,6 +145,15 @@ CREATE TABLE IF NOT EXISTS gifts (
   order_id INTEGER REFERENCES orders(id),
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
+CREATE TABLE IF NOT EXISTS bean_sales (
+  id INTEGER PRIMARY KEY,
+  subscription_id INTEGER REFERENCES bean_subscriptions(id),
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  bean TEXT NOT NULL,
+  size TEXT NOT NULL,
+  price_cents INTEGER NOT NULL,
+  at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
@@ -157,9 +167,19 @@ const LATER_COLUMNS = [
   ['users', 'must_change_password', 'INTEGER NOT NULL DEFAULT 0'],
   ['users', 'preferences', "TEXT NOT NULL DEFAULT '{}'"],
   ['users', 'birthday_changed_at', 'TEXT'],
+  ['users', 'username', 'TEXT'],
   ['orders', 'gift_id', 'INTEGER REFERENCES gifts(id)'],
 ];
 const DEFAULT_SETTINGS = { slot_capacity: () => process.env.SLOT_CAPACITY || '5', orders_paused: () => '0', extra_delay_min: () => '0' };
+
+// "vorname.nachname" + 4 random digits, unique.
+export function newUsername(db, name) {
+  const base = usernameBase(name);
+  for (;;) {
+    const candidate = `${base}${String(randomInt(1000, 10000))}`;
+    if (!db.prepare('SELECT 1 FROM users WHERE username = ?').get(candidate)) return candidate;
+  }
+}
 
 export function hashPassword(pw) {
   const salt = randomBytes(16).toString('hex');
@@ -179,11 +199,14 @@ export function openDb(file = 'data/cafe.db') {
   for (const [table, col, def] of LATER_COLUMNS) {
     if (!db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`);
   }
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS users_username ON users(username)');
   const setting = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
   for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) setting.run(key, value());
   if (!db.prepare('SELECT COUNT(*) n FROM menu_items').get().n) seed(db);
   else if (!db.prepare('SELECT COUNT(*) n FROM modifier_groups').get().n) tx(db, () => seedModifiers(db)); // older file: add item options
   if (!db.prepare("SELECT 1 FROM menu_items WHERE (',' || tags || ',') LIKE '%,plant,%'").get()) tx(db, () => tagPlantMilk(db)); // older file: vegan-with-plant-milk tags
+  // older file: give every account a username
+  for (const u of db.prepare('SELECT id, name FROM users WHERE username IS NULL').all()) db.prepare('UPDATE users SET username = ? WHERE id = ?').run(newUsername(db, u.name), u.id);
   return db;
 }
 

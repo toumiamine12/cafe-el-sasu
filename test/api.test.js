@@ -1039,3 +1039,85 @@ test('owner can set the plant-milk tag', async () => {
   const id = itemByName('Mokka Kaffee').id;
   assert.equal((await admin('PATCH', `/api/admin/menu/${id}`, { tags: 'lactose,plant' })).status, 200);
 });
+
+// --- usernames ------------------------------------------------------------------------
+
+test('every account gets a vorname.nachname#### username and can log in with it', async () => {
+  const a = client();
+  const r = await a('POST', '/api/register', { name: 'Gast Uname', email: 'uname1@example.com', password: 'kaffee1234' });
+  assert.match(r.body.username, /^gast\.uname\d{4}$/);
+  const b = client();
+  const r2 = await b('POST', '/api/register', { name: 'Gast Uname', email: 'uname2@example.com', password: 'kaffee1234' });
+  assert.notEqual(r2.body.username, r.body.username);
+  assert.equal((await client()('POST', '/api/login', { id: r.body.username.toUpperCase(), password: 'kaffee1234' })).status, 200);
+  const admin = await login('SASU-1000', 'admin123');
+  const staff = await admin('POST', '/api/admin/staff', { name: 'Ömer Çelik', email: 'oemer@cafe-elsasu.de', password: 'Temporaer1', hourly_wage: 1300 });
+  assert.match(staff.body.username, /^oemer\.celik\d{4}$/);
+  const adminName = db.prepare("SELECT username FROM users WHERE member_id = 'SASU-1000'").get().username;
+  assert.equal((await client()('POST', '/api/login', { id: adminName, password: 'admin123' })).status, 200);
+});
+
+// --- bean sales & analytics -------------------------------------------------------------
+
+test('handing out a bean bag records a sale', async () => {
+  const c = await newGuest('beansale');
+  const lena = await login('SASU-1001', 'staff123');
+  const sub = (await c('POST', '/api/me/beans', { bean: 'espresso', size: '1kg', every_weeks: 2, first_pickup: tomorrow() })).body;
+  const before = db.prepare('SELECT COUNT(*) n FROM bean_sales').get().n;
+  await lena('POST', `/api/admin/beans/${sub.id}/handed`);
+  const sale = db.prepare('SELECT * FROM bean_sales ORDER BY id DESC').get();
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM bean_sales').get().n, before + 1);
+  assert.equal(sale.price_cents, 2990);
+  assert.equal(sale.subscription_id, sub.id);
+});
+
+test('analytics: owner only, valid ranges', async () => {
+  const admin = await login('SASU-1000', 'admin123');
+  const lena = await login('SASU-1001', 'staff123');
+  assert.equal((await lena('GET', '/api/admin/analytics?range=week')).status, 403);
+  for (const q of ['range=year', 'from=2026-10-10&to=2026-10-01', 'from=2025-01-01&to=2026-01-01', 'from=heute&to=morgen']) {
+    assert.equal((await admin('GET', `/api/admin/analytics?${q}`)).status, 400, q);
+  }
+  const d = new Date(Date.now() - 3 * 864e5).toISOString().slice(0, 10);
+  const r = await admin('GET', `/api/admin/analytics?from=${d}&to=${new Date().toISOString().slice(0, 10)}`);
+  assert.equal(r.status, 200);
+  assert.equal(r.body.timeline.length, 4);
+});
+
+test('analytics: numbers add up', async () => {
+  const admin = await login('SASU-1000', 'admin123');
+  const a = (await admin('GET', '/api/admin/analytics?range=month')).body;
+  const k = a.kpi;
+  const orderRevenue = db.prepare("SELECT COALESCE(SUM(total_cents), 0) s, COUNT(*) n FROM orders WHERE status = 'picked_up' AND pickup_at >= ? AND pickup_at < ?").get(a.range.from_utc, a.range.to_utc);
+  const beans = db.prepare('SELECT COALESCE(SUM(price_cents), 0) s FROM bean_sales WHERE at >= ? AND at < ?').get(a.range.from_utc, a.range.to_utc).s;
+  assert.equal(k.gross_cents, orderRevenue.s + beans);
+  assert.equal(k.orders, orderRevenue.n);
+  assert.equal(k.net_cents, k.gross_cents - k.labor_cents);
+  assert.ok(Math.abs(k.labor_ratio - k.labor_cents / k.gross_cents) < 1e-9);
+  assert.equal(k.avg_ticket_cents, Math.round(orderRevenue.s / orderRevenue.n));
+  assert.ok(k.labor_cents > 0 && k.discounts_cents >= 0);
+  assert.equal(a.timeline.reduce((s, d) => s + d.revenue_cents, 0), k.gross_cents);
+  assert.equal(a.timeline.reduce((s, d) => s + d.labor_cents, 0), k.labor_cents);
+  assert.deepEqual(a.hours.map((h) => h.hour), [9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]);
+  assert.deepEqual(a.categories.map((c) => c.label), ['Kaffee', 'Kaltgetränke', 'Kuchen', 'Gebäck', 'Kaffeebohnen']);
+  assert.ok(Math.abs(a.categories.reduce((s, c) => s + c.share, 0) - 1) < 1e-9);
+  assert.ok(a.top_items.length <= 10 && a.top_items.every((x, i, l) => i === 0 || l[i - 1].revenue_cents >= x.revenue_cents));
+  assert.ok(a.slow_items.length <= 5 && a.slow_items.every((x, i, l) => i === 0 || l[i - 1].qty <= x.qty));
+  assert.equal(a.channels.online + a.channels.walkin, k.orders);
+  assert.equal(a.vat.reduced.gross + a.vat.standard.gross, k.gross_cents);
+  assert.ok(Array.isArray(a.modifiers) && a.insights.length >= 3);
+});
+
+test('report CSV for the same range', async () => {
+  const admin = await login('SASU-1000', 'admin123');
+  const lena = await login('SASU-1001', 'staff123');
+  assert.equal((await lena('GET', '/api/admin/report.csv?range=week')).status, 403);
+  const res = await fetch(`${base}/api/admin/report.csv?range=week`, { headers: { cookie: await cookieOf(admin) } });
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get('content-disposition'), /bericht-.*\.csv/);
+  const lines = (await res.text()).replace(/^\uFEFF/, '').trim().split('\r\n');
+  for (const label of ['Brutto-Umsatz', 'Netto-Umsatz', 'MwSt 7 %', 'MwSt 19 %', 'Personalkosten', 'Ergebnis', 'Bestellungen']) {
+    assert.ok(lines.some((l) => l.startsWith(label + ';')), label);
+  }
+  assert.ok(lines.includes('Datum;Umsatz;Personalkosten;Ergebnis;Bestellungen'));
+});

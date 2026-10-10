@@ -161,3 +161,64 @@ export const addWeeks = (dateIso, weeks) => new Date(Date.parse(`${dateIso}T00:0
 // One birthday treat per birthday: not again within 300 days (a calendar-year check would allow
 // two treats when the birthday week spans new year).
 export const birthdayTreatOpen = (lastUsedIso, now = new Date()) => !lastUsedIso || now - Date.parse(lastUsedIso) > 300 * 864e5;
+
+// --- usernames ---------------------------------------------------------------------------
+const FOLD = { ä: 'ae', ö: 'oe', ü: 'ue', ß: 'ss', ı: 'i', ş: 's', ç: 'c', ğ: 'g', é: 'e', è: 'e', ê: 'e', á: 'a', à: 'a', â: 'a', ó: 'o', ò: 'o', ô: 'o', í: 'i', ì: 'i', î: 'i', ú: 'u', ù: 'u', û: 'u', ñ: 'n' };
+// "Görkem Sarı-Öz" → "goerkem.sari-oez"; the caller appends 4 random digits.
+export function usernameBase(name) {
+  const base = String(name).toLowerCase().replace(/[^\x00-\x7f]/g, (c) => FOLD[c] ?? '')
+    .trim().split(/\s+/).map((w) => w.replace(/[^a-z0-9-]/g, '')).filter(Boolean).join('.');
+  return base || 'gast';
+}
+
+// --- VAT (Germany, takeaway): 7 % food, 19 % drinks; amounts are gross (VAT included) --------
+export function vatSplit({ food, drinks }) {
+  const part = (gross, rate) => {
+    const net = Math.round(gross / (1 + rate / 100));
+    return { rate, gross, net, vat: gross - net };
+  };
+  return { reduced: part(food, 7), standard: part(drinks, 19) };
+}
+
+// --- rules-based business tips for the Finanzen dashboard ----------------------------------
+const pct = (x) => Math.round(x * 100);
+export function businessInsights(a) {
+  const tips = [];
+  if (a.plant_share >= 0.1) {
+    tips.push({ tone: 'info', text: `Hafermilch & Co. stecken in ${pct(a.plant_share)} % aller Milchgetränke – Pflanzenmilch gut bevorraten.` });
+  }
+  const total = a.hours.reduce((s, h) => s + h.orders, 0);
+  if (total) {
+    let best = null;
+    for (let i = 0; i < a.hours.length - 1; i++) {
+      const sum = a.hours[i].orders + a.hours[i + 1].orders;
+      if (!best || sum > best.sum) best = { from: a.hours[i].hour, sum };
+    }
+    if (best) tips.push({ tone: 'warn', text: `Rush zwischen ${best.from}–${best.from + 2} Uhr: ${pct(best.sum / total)} % der Bestellungen – planen Sie dann mindestens 2 Personen ein.` });
+  }
+  if (a.kpi.gross_cents > 0) {
+    const r = a.kpi.labor_ratio;
+    tips.push(r > 0.35 ? { tone: 'warn', text: `Personalkosten bei ${pct(r)} % des Umsatzes – Ziel sind unter 30 %. Schichten in ruhigen Stunden kürzen.` }
+      : r < 0.25 ? { tone: 'good', text: `Personalkosten bei ${pct(r)} % des Umsatzes – sehr effizient.` }
+        : { tone: 'info', text: `Personalkosten bei ${pct(r)} % des Umsatzes – im üblichen Rahmen.` });
+    const top = a.top_items[0];
+    if (top) tips.push({ tone: 'good', text: `${top.name} ist Ihr Umsatzbringer Nr. 1 mit ${pct(top.revenue_cents / a.kpi.gross_cents)} % des Umsatzes.` });
+  }
+  const slow = a.slow_items[0];
+  if (slow) tips.push({ tone: 'warn', text: `${slow.name} wurde nur ${slow.qty}× verkauft – Rezept, Preis oder Platz auf der Karte prüfen.` });
+  const orders = a.channels.online + a.channels.walkin;
+  if (orders) tips.push({ tone: 'info', text: `${pct(a.channels.online / orders)} % der Bestellungen kommen online vorbestellt, ${pct(a.channels.walkin / orders)} % direkt an der Theke.` });
+  const day = [...a.weekdays].sort((x, y) => y.revenue_cents - x.revenue_cents)[0];
+  if (day?.revenue_cents) tips.push({ tone: 'good', text: `${day.day} ist der umsatzstärkste Wochentag – ideal für Aktionen und neue Produkte.` });
+  return tips;
+}
+
+// UTC instant of a Berlin wall-clock hour on a date (handles summer/winter time).
+const berlinParts = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Berlin', hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+export function berlinTime(date, hour) {
+  const guess = new Date(Date.parse(`${date}T00:00:00Z`) + hour * 3600e3);
+  const p = Object.fromEntries(berlinParts.formatToParts(guess).map((x) => [x.type, Number(x.value)]));
+  const offset = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute) - guess.getTime();
+  return new Date(guess.getTime() - offset);
+}
+

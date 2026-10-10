@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { tierFor, isOpenAt, validatePickup, priceOrder, pointsFor, nextChange, validateModifiers, slotStart, SLOT_CAPACITY, netMinutes, breakShortfall, payCents,
-  inBirthdayWeek, usualCombo, usualTime, BEAN_PRICES, addWeeks, birthdayTreatOpen } from '../server/rules.js';
+  inBirthdayWeek, usualCombo, usualTime, BEAN_PRICES, addWeeks, birthdayTreatOpen,
+  usernameBase, vatSplit, businessInsights } from '../server/rules.js';
 
 // Berlin is UTC+2 in summer: 2026-07-07 is a Tuesday.
 const berlin = (iso) => new Date(iso + '+02:00');
@@ -185,4 +186,41 @@ test('birthday treat: once per birthday, also when the week spans new year', () 
   assert.equal(birthdayTreatOpen(null, new Date('2027-01-01T10:00:00Z')), true);
   assert.equal(birthdayTreatOpen('2026-12-28T10:00:00Z', new Date('2027-01-01T10:00:00Z')), false);
   assert.equal(birthdayTreatOpen('2026-01-02T10:00:00Z', new Date('2026-12-30T10:00:00Z')), true); // last birthday's treat
+});
+
+// --- usernames, VAT, insights ---------------------------------------------------------
+test('usernameBase folds names to vorname.nachname', () => {
+  assert.equal(usernameBase('Anna Schmidt'), 'anna.schmidt');
+  assert.equal(usernameBase('Görkem Sarı-Öz'), 'goerkem.sari-oez');
+  assert.equal(usernameBase('Elif Yıldız'), 'elif.yildiz');
+  assert.equal(usernameBase('Miraç Subaşı'), 'mirac.subasi');
+  assert.equal(usernameBase('Laufkundschaft'), 'laufkundschaft');
+  assert.equal(usernameBase('Jean  Paul  Müller'), 'jean.paul.mueller');
+  assert.equal(usernameBase('!!!'), 'gast');
+});
+
+test('vatSplit: 7 % food, 19 % drinks, gross includes VAT', () => {
+  const v = vatSplit({ food: 10700, drinks: 11900 });
+  assert.deepEqual(v.reduced, { rate: 7, gross: 10700, net: 10000, vat: 700 });
+  assert.deepEqual(v.standard, { rate: 19, gross: 11900, net: 10000, vat: 1900 });
+});
+
+test('businessInsights turns numbers into tips', () => {
+  const tips = businessInsights({
+    kpi: { gross_cents: 100000, labor_cents: 40000, labor_ratio: 0.4, orders: 200 },
+    hours: [{ hour: 9, orders: 10 }, { hour: 10, orders: 60 }, { hour: 11, orders: 50 }, { hour: 12, orders: 20 }],
+    plant_share: 0.35,
+    top_items: [{ name: 'Flat White', revenue_cents: 30000 }],
+    slow_items: [{ name: 'Künefe', qty: 1 }],
+    channels: { online: 60, walkin: 140 },
+    weekdays: [{ day: 'Samstag', revenue_cents: 30000 }, { day: 'Dienstag', revenue_cents: 5000 }],
+  });
+  const text = tips.map((t) => t.text).join(' | ');
+  assert.match(text, /35 % aller Milchgetränke/);
+  assert.match(text, /10–12 Uhr/);
+  assert.match(text, /Personalkosten.*40 %/);
+  assert.match(text, /Künefe/);
+  assert.match(text, /30 % .*online/);
+  assert.match(text, /Samstag/);
+  assert.ok(tips.every((t) => ['good', 'warn', 'info'].includes(t.tone)));
 });
