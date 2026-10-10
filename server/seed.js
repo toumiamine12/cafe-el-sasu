@@ -131,7 +131,7 @@ export function seedModifiers(db) {
 function secret(envName, label, ids) {
   if (process.env[envName]) return process.env[envName];
   const pw = randomBytes(9).toString('base64url');
-  console.log(`${label}-Passwort (${ids}): ${pw}   – setze ${envName}, um es festzulegen`);
+  console.log(`${label}-Passwort (${ids}): ${pw}   – über ${envName} fest einstellbar`);
   return pw;
 }
 
