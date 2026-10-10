@@ -4,9 +4,9 @@ A full-stack preorder app for a café in Krefeld. Customers log in with a member
 
 Built with **Node.js, Express and SQLite** (`node:sqlite`). The frontend is plain HTML/CSS/JS on top of the original Bootstrap 3 site, with no build step. The only runtime dependency is `express`.
 
-| Menu | Cart & pickup |
+| Speisekarte | Item details |
 |---|---|
-| ![Menu](docs/screenshots/menu.png) | ![Cart](docs/screenshots/cart.png) |
+| ![Menu](docs/screenshots/menu.png) | ![Item](docs/screenshots/item.png) |
 | **Member account** | **Admin finance** |
 | ![Account](docs/screenshots/account.png) | ![Finance](docs/screenshots/admin-finance.png) |
 
@@ -14,11 +14,12 @@ Built with **Node.js, Express and SQLite** (`node:sqlite`). The frontend is plai
 
 **Customers**
 - Register and get a member ID (`SASU-1007`, …); log in with the member ID or email
-- Menu of 34 items with category tabs and allergen/vegan tags; add to cart from the menu or home page
+- Menu of 49 items laid out like a printed café menu: sticky category bar, search, item popup with quantity, allergen/vegan tags, floating cart bar
 - Preorder for pickup: only valid 15-minute slots inside opening hours, at least 15 min ahead
 - Pay at pickup, cancel while the order is still "Eingegangen"
 - Live order status on the account page (refreshes every 10 s, toast when ready)
-- Reorder a past order in one click
+- Account page: welcome banner, member card, stats (orders, total spent, favorite), full purchase history with receipts, reorder in one click
+- Edit name, email and birthday; change password (signs out other devices)
 
 **Loyalty**
 - 1 point per €1, credited when the order is picked up
@@ -41,7 +42,7 @@ Needs Node.js 22.13 or newer.
 ```bash
 npm install
 npm start          # http://localhost:3000
-npm test           # 31 API + rules tests
+npm test           # 36 API + rules tests
 ```
 
 The database (`data/cafe.db`) is created and filled with demo data on first start. Delete `data/` to reset.
@@ -75,6 +76,10 @@ server/seed.js       demo menu, users, a month of order history
 public/              the website (HTML/CSS/JS, photos)
 test/                node --test suites
 ```
+
+## Photo credits
+
+The photos of 30 menu items come from Wikimedia Commons and Flickr under Creative Commons licenses; each one is credited on `/credits.html`. All other photos belong to Café El Sasu.
 
 ## Next ideas
 

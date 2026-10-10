@@ -1,71 +1,110 @@
-// Mitgliedskarte, Prämien, Bestellungen mit Live-Status.
+// Mein Konto: Willkommen, Übersicht, Bestellverlauf, Profil.
 const $ = (id) => document.getElementById(id);
-const fmt = new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', dateStyle: 'medium', timeStyle: 'short' });
+const fmtDate = new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', dateStyle: 'medium', timeStyle: 'short' });
+const berlinHour = () => Number(new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', hour: 'numeric', hourCycle: 'h23' }).format(new Date()));
 const ACTIVE = ['new', 'preparing', 'ready'];
+const TIER_MIN = { Bronze: 0, Silver: 200, Gold: 500 };
+const NEXT_TIER = { Bronze: 'Silver', Silver: 'Gold' };
+let user;
+let orders = [];
 let lastStatus = {};
 let timer;
 
-function renderCard(u) {
-  const t = u.tier;
-  const prevMin = { Bronze: 0, Silver: 200, Gold: 500 }[t.name];
-  const pct = t.next ? Math.round(((u.lifetime_points - prevMin) / (t.next - prevMin)) * 100) : 100;
+// --- tabs (kept in the URL hash so reload and back work) ----------------------
+function showTab(tab) {
+  if (!['overview', 'orders', 'profile'].includes(tab)) tab = 'overview';
+  $('acc-tabs').querySelectorAll('button').forEach((b) => b.setAttribute('aria-selected', b.dataset.tab === tab));
+  document.querySelectorAll('[role="tabpanel"]').forEach((p) => { p.hidden = p.id !== tab; });
+}
+$('acc-tabs').addEventListener('click', (e) => {
+  if (!e.target.dataset.tab) return;
+  history.replaceState(null, '', '#' + e.target.dataset.tab);
+  showTab(e.target.dataset.tab);
+});
+
+// --- welcome + card -------------------------------------------------------------
+function renderWelcome() {
+  const h = berlinHour();
+  const hello = h < 11 ? 'Guten Morgen' : h < 18 ? 'Hallo' : 'Guten Abend';
+  const first = user.name.split(' ')[0];
+  $('greeting').textContent = `${hello}, ${first}`;
+  const active = orders.filter((o) => ACTIVE.includes(o.status));
+  const ready = active.find((o) => o.status === 'ready');
+  $('welcome-sub').textContent = ready ? `Deine Bestellung #${ready.id} ist abholbereit.`
+    : active.length ? `${active.length === 1 ? 'Eine Bestellung ist' : `${active.length} Bestellungen sind`} in Arbeit.`
+      : 'Lust auf einen Kaffee? Bestell vor und hol ihn ohne Warten ab.';
+
+  const t = user.tier;
+  const pct = t.next ? Math.round(((user.lifetime_points - TIER_MIN[t.name]) / (t.next - TIER_MIN[t.name])) * 100) : 100;
   $('card').className = `member-card ${t.name}`;
   $('card').innerHTML = `
-    <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px">
-      <div><div class="muted" style="color:#fff;opacity:.8">${esc(u.name)}</div><div class="mid">${esc(u.member_id)}</div></div>
-      <div style="text-align:right"><div style="font-size:20px;font-weight:bold">${t.name}</div>
-        <div>${t.discountPct ? `${t.discountPct}% Rabatt auf jede Bestellung` : 'Sammle Punkte für Rabatte'}</div></div>
+    <div class="top"><img src="photos/logo.png" alt="" /><span class="tier">${t.name}</span></div>
+    <div>
+      <div class="mid">${esc(user.member_id)}</div>
+      <div>${esc(user.name)}</div>
     </div>
-    <div class="pts">${u.points} <span style="font-size:16px">Punkte</span></div>
-    <div>${t.next ? `Noch ${t.next - u.lifetime_points} Punkte bis ${t.name === 'Bronze' ? 'Silver' : 'Gold'}` : 'Höchste Stufe erreicht 🎉'}</div>
-    <div class="progress-cafe" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"><div style="width:${pct}%"></div></div>`;
+    <div>
+      <div class="pts"><strong>${user.points}</strong> Punkte${t.discountPct ? ` · ${t.discountPct}% Rabatt` : ''}</div>
+      <div class="progress on-dark" role="progressbar" aria-label="Fortschritt zur nächsten Stufe" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"><div style="width:${pct}%"></div></div>
+      <div style="font-size:13px;margin-top:4px">${t.next ? `Noch ${t.next - user.lifetime_points} Punkte bis ${NEXT_TIER[t.name]}` : 'Höchste Stufe erreicht'}</div>
+    </div>`;
 }
 
-function renderRewards(u, rewards) {
-  $('rewards').innerHTML = '<p class="muted">1 Punkt pro Euro. Punkte werden bei Abholung gutgeschrieben. Prämien löst du im Warenkorb ein.</p>' +
-    rewards.map((r) => `
-      <div class="row-line">
-        <div class="grow"><strong>${esc(r.name)}</strong>${r.birthday_only ? ' 🎂 Alles Gute zum Geburtstag!' : ''}</div>
-        <span class="${u.points >= r.cost_points ? 'status ready' : 'muted'}">${r.cost_points} Punkte</span>
-      </div>`).join('');
-}
+// --- overview -------------------------------------------------------------------
+function renderOverview(rewards) {
+  const stat = (label, value) => `<div class="stat"><div class="label">${label}</div><div class="value">${value}</div></div>`;
+  $('stats').innerHTML = stat('Abgeholte Bestellungen', user.stats.orders) + stat('Insgesamt ausgegeben', euro(user.stats.spent_cents))
+    + stat('Dein Favorit', user.stats.favorite ? esc(user.stats.favorite) : '—');
 
-function renderOrders(orders) {
-  $('orders').innerHTML = orders.length ? orders.map((o) => `
-    <div class="row-line" style="flex-wrap:wrap">
-      <div class="grow">
-        <strong>#${o.id}</strong> · Abholung ${fmt.format(new Date(o.pickup_at))}<br />
-        <span class="muted">${o.items.map((i) => `${i.qty}× ${esc(i.name)}`).join(', ')}</span>
-      </div>
-      <strong>${euro(o.total_cents)}</strong>
+  $('rewards').innerHTML = rewards.map((r) => {
+    const pct = r.cost_points ? Math.min(100, Math.round((user.points / r.cost_points) * 100)) : 100;
+    const ready = user.points >= r.cost_points;
+    return `<div class="reward">
+      <strong>${esc(r.name)}${r.birthday_only ? ' · Alles Gute zum Geburtstag!' : ''}</strong>
+      <span class="${ready ? 'status ready' : 'muted'}">${ready ? 'Einlösbar' : `${user.points} / ${r.cost_points} Punkte`}</span>
+      <div class="progress"><div style="width:${pct}%"></div></div>
+    </div>`;
+  }).join('');
+
+  const active = orders.filter((o) => ACTIVE.includes(o.status));
+  $('active-panel').hidden = !active.length;
+  $('active-orders').innerHTML = active.map((o) => `
+    <div class="row-line">
+      <div class="grow"><strong>#${o.id}</strong> · Abholung ${fmtDate.format(new Date(o.pickup_at))}<br />
+        <span class="muted">${o.items.map((i) => `${i.qty}× ${esc(i.name)}`).join(', ')}</span></div>
       <span class="status ${o.status === 'ready' ? 'ready' : ''}">${STATUS[o.status]}</span>
-      ${o.status === 'new' ? `<button class="btn-ghost" data-cancel="${o.id}">Stornieren</button>` : ''}
-      <button class="btn-ghost" data-reorder="${o.id}">Nochmal bestellen</button>
-    </div>`).join('') : '<p class="muted">Noch keine Bestellungen. <a href="menu.html">Jetzt bestellen</a></p>';
+    </div>`).join('');
 }
 
-async function loadOrders() {
-  const orders = await api('/api/orders');
-  for (const o of orders) {
-    if (lastStatus[o.id] && lastStatus[o.id] !== 'ready' && o.status === 'ready') toast(`Bestellung #${o.id} ist abholbereit ☕`);
-    lastStatus[o.id] = o.status;
-  }
-  renderOrders(orders);
-  window.lastOrders = orders;
-  clearTimeout(timer);
-  if (orders.some((o) => ACTIVE.includes(o.status))) timer = setTimeout(refresh, 10000);
+// --- order history --------------------------------------------------------------
+function renderOrders() {
+  const open = new Set([...document.querySelectorAll('.order[open]')].map((d) => d.dataset.id));
+  $('order-list').innerHTML = orders.length ? orders.map((o) => `
+    <details class="order" data-id="${o.id}" ${open.has(String(o.id)) ? 'open' : ''}>
+      <summary>
+        <div><strong>${fmtDate.format(new Date(o.created_at))}</strong> <span class="muted">· #${o.id}</span><br />
+          <span class="muted">${o.items.map((i) => `${i.qty}× ${esc(i.name)}`).join(', ')}</span></div>
+        <span class="status ${o.status === 'ready' ? 'ready' : o.status === 'cancelled' ? 'cancelled' : ''}">${STATUS[o.status]}</span>
+        <strong>${euro(o.total_cents)}</strong>
+      </summary>
+      <div class="detail">
+        <p class="muted">Abholung: ${fmtDate.format(new Date(o.pickup_at))}</p>
+        <table>
+          ${o.items.map((i) => `<tr><td>${i.qty}× ${esc(i.name)}</td><td>${euro(i.unit_price_cents * i.qty)}</td></tr>`).join('')}
+          <tr><td class="muted">Zwischensumme</td><td>${euro(o.subtotal_cents)}</td></tr>
+          ${o.discount_cents ? `<tr><td class="muted">Rabatt${o.reward_id ? ' inkl. Prämie' : ''}</td><td>−${euro(o.discount_cents)}</td></tr>` : ''}
+          <tr class="sum"><td>Gesamt (bezahlt bei Abholung)</td><td>${euro(o.total_cents)}</td></tr>
+        </table>
+        <div class="buttons">
+          <button class="btn-cafe" data-reorder="${o.id}">Nochmal bestellen</button>
+          ${o.status === 'new' ? `<button class="btn-ghost" data-cancel="${o.id}">Bestellung stornieren</button>` : ''}
+        </div>
+      </div>
+    </details>`).join('') : '<p>Du hast noch nichts bestellt. <a class="btn-cafe" href="menu.html">Zur Speisekarte</a></p>';
 }
 
-async function refresh() {
-  const u = await api('/api/me');
-  renderCard(u);
-  renderRewards(u, await api('/api/rewards'));
-  await loadOrders();
-}
-
-$('orders').addEventListener('click', async (e) => {
-  const cancel = e.target.dataset.cancel;
-  const reorder = e.target.dataset.reorder;
+$('order-list').addEventListener('click', async (e) => {
+  const { cancel, reorder } = e.target.dataset;
   if (cancel) {
     try {
       await api(`/api/orders/${cancel}/cancel`, { method: 'POST' });
@@ -74,10 +113,40 @@ $('orders').addEventListener('click', async (e) => {
     } catch (err) { toast(err.message); }
   }
   if (reorder) {
-    const o = window.lastOrders.find((x) => x.id === Number(reorder));
-    for (const i of o.items) cart.add(i.menu_item_id, i.qty);
+    for (const i of orders.find((o) => o.id === Number(reorder)).items) cart.add(i.menu_item_id, i.qty);
     location.href = 'order.html';
   }
+});
+
+// --- profile ----------------------------------------------------------------------
+function fillProfile() {
+  $('p-name').value = user.name;
+  $('p-email').value = user.email;
+  $('p-birthday').value = user.birthday || '';
+  $('p-member').value = user.member_id;
+}
+
+$('profile-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  $('profile-error').textContent = '';
+  try {
+    user = await api('/api/me', { method: 'PATCH', body: {
+      name: $('p-name').value, email: $('p-email').value, birthday: $('p-birthday').value || null,
+    } });
+    fillProfile();
+    renderWelcome();
+    toast('Änderungen gespeichert');
+  } catch (err) { $('profile-error').textContent = err.message; }
+});
+
+$('password-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  $('password-error').textContent = '';
+  try {
+    await api('/api/me/password', { method: 'POST', body: { current: $('pw-current').value, next: $('pw-next').value } });
+    e.target.reset();
+    toast('Passwort geändert');
+  } catch (err) { $('password-error').textContent = err.message; }
 });
 
 $('logout').addEventListener('click', async () => {
@@ -85,10 +154,29 @@ $('logout').addEventListener('click', async () => {
   location.href = 'index.html';
 });
 
-me.then((u) => {
+// --- load + live status -------------------------------------------------------------
+async function refresh() {
+  const [me, rewards, list] = await Promise.all([api('/api/me'), api('/api/rewards'), api('/api/orders')]);
+  if (!me) return location.replace('login.html?next=account.html');
+  user = me;
+  orders = list;
+  for (const o of orders) {
+    if (lastStatus[o.id] && lastStatus[o.id] !== 'ready' && o.status === 'ready') toast(`Bestellung #${o.id} ist abholbereit`);
+    lastStatus[o.id] = o.status;
+  }
+  renderWelcome();
+  renderOverview(rewards);
+  renderOrders();
+  clearTimeout(timer);
+  if (orders.some((o) => ACTIVE.includes(o.status))) timer = setTimeout(refresh, 10000);
+}
+
+me.then(async (u) => {
   if (!u) return location.replace('login.html?next=account.html');
+  showTab(location.hash.slice(1));
+  await refresh();
+  fillProfile();
   const p = new URLSearchParams(location.search);
   if (p.get('placed')) toast(`Danke! Bestellung #${p.get('placed')} ist eingegangen.`);
   if (p.get('welcome')) toast(`Willkommen! Deine Mitgliedsnummer: ${p.get('welcome')}`);
-  refresh();
 });

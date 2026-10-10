@@ -153,7 +153,7 @@ test('orders list shows only own orders with items', async () => {
 test('menu is public and hides inactive items', async () => {
   const r = await client()('GET', '/api/menu');
   assert.equal(r.status, 200);
-  assert.ok(r.body.length >= 31);
+  assert.ok(r.body.length >= 49);
   assert.ok(r.body.every((i) => i.active === 1));
 });
 
@@ -263,4 +263,46 @@ test('birthday coffee can be redeemed once per year', async () => {
   assert.ok(!(await c('GET', '/api/rewards')).body.some((r) => r.id === bday.id));
   await c('POST', `/api/orders/${first.body.id}/cancel`);
   assert.ok((await c('GET', '/api/rewards')).body.some((r) => r.id === bday.id), 'cancel gives it back');
+});
+
+// --- account ----------------------------------------------------------------
+
+test('me includes purchase stats', async () => {
+  const c = await login('SASU-1004', 'demo123');
+  const me = (await c('GET', '/api/me')).body;
+  const row = db.prepare("SELECT COUNT(*) n, SUM(total_cents) s FROM orders WHERE user_id = 5 AND status = 'picked_up'").get();
+  assert.equal(me.stats.orders, row.n);
+  assert.equal(me.stats.spent_cents, row.s);
+  assert.ok(me.stats.favorite);
+});
+
+test('profile update changes name, email, birthday', async () => {
+  const c = client();
+  await c('POST', '/api/register', { name: 'Old', email: 'old@example.com', password: 'secret12' });
+  const r = await c('PATCH', '/api/me', { name: 'Neu Name', email: 'neu@example.com', birthday: '1990-05-17' });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.name, 'Neu Name');
+  assert.equal(r.body.email, 'neu@example.com');
+  assert.equal(r.body.birthday, '1990-05-17');
+  assert.equal((await c('PATCH', '/api/me', { email: 'anna@example.com' })).status, 409);
+  assert.equal((await c('PATCH', '/api/me', { email: 'nope' })).status, 400);
+  assert.equal((await c('PATCH', '/api/me', { birthday: '2000-13-45' })).status, 400);
+  assert.equal((await c('PATCH', '/api/me', { role: 'admin', points: 9999 })).status, 400);
+  assert.equal((await c('GET', '/api/me')).body.role, 'customer');
+  assert.equal((await c('PATCH', '/api/me', { birthday: null })).body.birthday, null);
+});
+
+test('password change needs the current password', async () => {
+  const c = client();
+  await c('POST', '/api/register', { name: 'Pw', email: 'pw@example.com', password: 'secret12' });
+  assert.equal((await c('POST', '/api/me/password', { current: 'wrong', next: 'newsecret' })).status, 401);
+  assert.equal((await c('POST', '/api/me/password', { current: 'secret12', next: '123' })).status, 400);
+  assert.equal((await c('POST', '/api/me/password', { current: 'secret12', next: 'newsecret' })).status, 200);
+  assert.equal((await client()('POST', '/api/login', { id: 'pw@example.com', password: 'secret12' })).status, 401);
+  await login('pw@example.com', 'newsecret');
+});
+
+test('account routes need login', async () => {
+  assert.equal((await client()('PATCH', '/api/me', { name: 'x' })).status, 401);
+  assert.equal((await client()('POST', '/api/me/password', { current: 'a', next: 'bbbbbb' })).status, 401);
 });

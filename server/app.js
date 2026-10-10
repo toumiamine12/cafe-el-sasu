@@ -14,6 +14,15 @@ const fail = (status, message) => { throw new HttpError(status, message); };
 
 const publicUser = ({ password_hash, ...u }) => ({ ...u, tier: tierFor(u.lifetime_points) });
 
+// Field checks shared by register and profile edit.
+const checkName = (v) => { if (typeof v !== 'string' || !v.trim() || v.length > 80) fail(400, 'Name fehlt'); };
+const checkEmail = (v) => { if (typeof v !== 'string' || v.length > 120 || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)) fail(400, 'Ungültige E-Mail'); };
+const checkPassword = (v) => { if (typeof v !== 'string' || v.length < 6) fail(400, 'Passwort braucht mindestens 6 Zeichen'); };
+const checkBirthday = (v) => {
+  const ok = typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && !isNaN(new Date(v)) && new Date(v).toISOString().startsWith(v);
+  if (!ok) fail(400, 'Ungültiges Geburtsdatum');
+};
+
 const berlinDay = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Berlin', month: '2-digit', day: '2-digit' });
 const isBirthday = (u) => !!u.birthday && u.birthday.slice(5) === berlinDay.format(new Date());
 
@@ -51,10 +60,10 @@ export function createApp(db) {
   // --- auth -----------------------------------------------------------------
   app.post('/api/register', (req, res) => {
     const { name, email, password, birthday } = req.body;
-    if (typeof name !== 'string' || !name.trim() || name.length > 80) fail(400, 'Name fehlt');
-    if (typeof email !== 'string' || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) fail(400, 'Ungültige E-Mail');
-    if (typeof password !== 'string' || password.length < 6) fail(400, 'Passwort braucht mindestens 6 Zeichen');
-    if (birthday && !/^\d{4}-\d{2}-\d{2}$/.test(birthday)) fail(400, 'Ungültiges Geburtsdatum');
+    checkName(name);
+    checkEmail(email);
+    checkPassword(password);
+    if (birthday) checkBirthday(birthday);
     if (q('SELECT 1 FROM users WHERE email = ?').get(email)) fail(409, 'E-Mail ist bereits registriert');
     const user = tx(db, () => {
       const n = q("SELECT COALESCE(MAX(CAST(SUBSTR(member_id, 6) AS INTEGER)), 999) + 1 n FROM users").get().n;
@@ -79,8 +88,38 @@ export function createApp(db) {
     res.clearCookie('sid').json({ ok: true });
   });
 
+  const withStats = (u) => {
+    const { orders, spent_cents } = q(`SELECT COUNT(*) orders, COALESCE(SUM(total_cents), 0) spent_cents FROM orders
+      WHERE user_id = ? AND status = 'picked_up'`).get(u.id);
+    const fav = q(`SELECT m.name FROM order_items oi JOIN orders o ON o.id = oi.order_id JOIN menu_items m ON m.id = oi.menu_item_id
+      WHERE o.user_id = ? AND o.status != 'cancelled' GROUP BY m.id ORDER BY SUM(oi.qty) DESC LIMIT 1`).get(u.id);
+    return { ...publicUser(u), stats: { orders, spent_cents, favorite: fav?.name ?? null } };
+  };
+
   // 200 + null when logged out, so pages can check login without a console error.
-  app.get('/api/me', (req, res) => res.json(req.user ? publicUser(req.user) : null));
+  app.get('/api/me', (req, res) => res.json(req.user ? withStats(req.user) : null));
+
+  const PROFILE_FIELDS = { name: checkName, email: checkEmail, birthday: (v) => v === null || checkBirthday(v) };
+  app.patch('/api/me', loggedIn, (req, res) => {
+    const fields = Object.entries(req.body);
+    if (!fields.length || fields.some(([k]) => !Object.hasOwn(PROFILE_FIELDS, k))) fail(400, 'Nur Name, E-Mail und Geburtstag sind änderbar');
+    for (const [k, v] of fields) PROFILE_FIELDS[k](v);
+    const email = req.body.email?.trim();
+    if (email && q('SELECT 1 FROM users WHERE email = ? AND id != ?').get(email, req.user.id)) fail(409, 'E-Mail ist bereits registriert');
+    const values = fields.map(([k, v]) => (typeof v === 'string' ? v.trim() : v));
+    q(`UPDATE users SET ${fields.map(([k]) => `${k} = ?`)} WHERE id = ?`).run(...values, req.user.id);
+    res.json(withStats(q('SELECT * FROM users WHERE id = ?').get(req.user.id)));
+  });
+
+  app.post('/api/me/password', loggedIn, (req, res) => {
+    const { current, next } = req.body;
+    if (typeof current !== 'string' || !verifyPassword(current, req.user.password_hash)) fail(401, 'Aktuelles Passwort ist falsch');
+    checkPassword(next);
+    q('UPDATE users SET password_hash = ? WHERE id = ?').run(hashPassword(next), req.user.id);
+    // Sign out other devices, keep this one.
+    q('DELETE FROM sessions WHERE user_id = ? AND token != ?').run(req.user.id, req.token);
+    res.json({ ok: true });
+  });
 
   // --- menu & rewards -------------------------------------------------------
   app.get('/api/menu', (req, res) => res.json(q('SELECT * FROM menu_items WHERE active = 1 ORDER BY category, name').all()));
