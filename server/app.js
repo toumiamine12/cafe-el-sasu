@@ -2,7 +2,7 @@ import express from 'express';
 import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { hashPassword, verifyPassword, tx } from './db.js';
-import { tierFor, validatePickup, priceOrder, pointsFor } from './rules.js';
+import { tierFor, isOpenAt, validatePickup, priceOrder, pointsFor, nextChange } from './rules.js';
 
 const SESSION_DAYS = 30;
 const PUBLIC = fileURLToPath(new URL('../public', import.meta.url));
@@ -140,6 +140,22 @@ export function createApp(db) {
       if (!validatePickup(t)) slots.push(t.toISOString());
     }
     res.json(slots);
+  });
+
+  // Home page: open right now? when does that change? earliest pickup?
+  app.get('/api/status', (req, res) => {
+    const now = new Date();
+    const next = new Date(Math.ceil((now.getTime() + 15 * 60e3) / 900e3) * 900e3);
+    for (const end = now.getTime() + 7 * 864e5; validatePickup(next, now) && next < end;) next.setTime(next.getTime() + 900e3);
+    res.json({ open: isOpenAt(now), changes_at: nextChange(now)?.toISOString() ?? null, next_pickup: next.toISOString() });
+  });
+
+  // Home page: best sellers of the last 7 days (padded with other items if sales are thin).
+  app.get('/api/popular', (req, res) => {
+    res.json(q(`SELECT m.*, COALESCE(s.sold, 0) sold FROM menu_items m
+      LEFT JOIN (SELECT oi.menu_item_id, SUM(oi.qty) sold FROM order_items oi JOIN orders o ON o.id = oi.order_id
+                 WHERE o.status != 'cancelled' AND o.created_at >= ? GROUP BY oi.menu_item_id) s ON s.menu_item_id = m.id
+      WHERE m.active = 1 ORDER BY sold DESC, m.id LIMIT 4`).all(new Date(Date.now() - 7 * 864e5).toISOString()));
   });
 
   // --- orders ---------------------------------------------------------------

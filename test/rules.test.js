@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { tierFor, isOpenAt, validatePickup, priceOrder, pointsFor } from '../server/rules.js';
+import { tierFor, isOpenAt, validatePickup, priceOrder, pointsFor, nextChange } from '../server/rules.js';
 
 // Berlin is UTC+2 in summer: 2026-07-07 is a Tuesday.
 const berlin = (iso) => new Date(iso + '+02:00');
@@ -57,4 +57,11 @@ test('priceOrder rejects reward with no matching item', () => {
 test('pointsFor gives 1 point per full euro', () => {
   assert.equal(pointsFor(1079), 10);
   assert.equal(pointsFor(99), 0);
+});
+
+test('nextChange finds the next opening or closing time', () => {
+  assert.equal(nextChange(berlin('2026-07-07T12:00')).getTime(), berlin('2026-07-07T22:00').getTime()); // Tue open → closes 22:00
+  assert.equal(nextChange(berlin('2026-07-06T12:00')).getTime(), berlin('2026-07-07T11:00').getTime()); // Mon closed → Tue 11:00
+  assert.equal(nextChange(berlin('2026-07-07T22:05')).getTime(), berlin('2026-07-08T11:00').getTime()); // Tue night → Wed 11:00
+  assert.equal(nextChange(berlin('2026-07-12T23:50')).getTime(), berlin('2026-07-13T00:00').getTime()); // Sun closes midnight
 });

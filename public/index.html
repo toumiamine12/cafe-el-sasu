@@ -38,85 +38,54 @@
         </div>
       </div>
     </nav>
-    <!--------------------------------------------------Opening Hours Section---------------------------------------------->
-    <div class="opening-hours">
+    <!--------------------------------------------------------Hero-------------------------------------------------------->
+    <header class="opening-hours home-hero">
       <div class="hours-content">
-        <h3 id="headline">Wo Kaffee <br/>Glücklich macht</h3>
-        <h2>Öffnungszeiten</h2>
-        <p>Dienstags bis Freitags 11 Uhr bis 22 Uhr</p>
-        <p>Samstags/Sonntags 10 Uhr bis 24 Uhr</p>
-        <p>Montags Ruhetag</p>
-      </div>
-    </div>
-    <!-----------------------------------------------------Angebot Section------------------------------------------------->
-    <h2 id="angebot">Aktuelle Angebot</h2>
-    <div class="drink-container">
-      <div class="drink-card">
-        <img src="photos/macchiato.jpg" alt="Espresso" />
-        <h3>Macchiato Masterpiece</h3>
-        <p>Espresso mit einem Hauch Milchschaum, elegant serviert</p>
-        <button data-add="Macchiato">Jetzt bestellen</button>
-      </div>
-
-      <div class="drink-card">
-        <img src="photos/iced.jpg" alt="Iced Coffee" />
-        <h3>Iced Favorites</h3>
-        <p>Erfrischende Eiskaffees für heiße Sommertage.</p>
-        <button data-add="Iced Favorites">Jetzt bestellen</button>
-      </div>
-
-      <div class="drink-card">
-        <img src="photos/matcha.jpg" alt="Coffee Latte" />
-        <h3>Matcha Coffee</h3>
-        <p>Belebender Kaffee mit cremigem grünen Tee-Geschmack</p>
-        <button data-add="Matcha Kaffee">Jetzt bestellen</button>
-      </div>
-
-      <div class="drink-card">
-        <img src="photos/affogato.jpg" alt="Organic Beans" />
-        <h3>Affogato</h3>
-        <p>Espresso trifft auf cremiges Vanilleeis,süß und stark</p>
-        <button data-add="Affogato">Jetzt bestellen</button>
-      </div>
-    </div>
-
-    <!--------------------------------------------------------Slide Section------------------------------------------------>
-    <div class="container">
-      <div class="row">
-        <div class="studies col-md-6 col-xs-12">
-          <div class="container" id="new">
-            <div id="myCarousel" class="carousel slide" data-ride="carousel">
-              <ol class="carousel-indicators">
-                <li data-target="#myCarousel" data-slide-to="0"class="active"></li>
-                <li data-target="#myCarousel" data-slide-to="1"></li>
-                <li data-target="#myCarousel" data-slide-to="2"></li>
-              </ol>
-
-              <div class="carousel-inner amin">
-                <div class="item active">
-                  <img src="photos/slide1.jpg" width="100%" height="100%" alt="canard"/>
-                </div>
-                <div class="item">
-                  <img src="photos/slide2.jpg" width="100%" height="50%" alt="canarde"/>
-                </div>
-                <div class="item">
-                  <img src="photos/slide3.jpg" width="100%" height="100%" alt="canard"/>
-                </div>
-              </div>
-
-              <a class="left carousel-control" href="#myCarousel" data-slide="prev">
-                <span class="glyphicon glyphicon-chevron-left"></span>
-                <span class="sr-only">Previous</span>
-              </a>
-              <a class="right carousel-control" href="#myCarousel" data-slide="next">
-                <span class="glyphicon glyphicon-chevron-right"></span>
-                <span class="sr-only">Next</span>
-              </a>
-            </div>
-          </div>
+        <h1 id="headline">Wo Kaffee <br />glücklich macht</h1>
+        <p class="live" id="live-status" aria-live="polite">&nbsp;</p>
+        <p class="pickup" id="next-pickup">&nbsp;</p>
+        <div class="hero-actions">
+          <a class="btn-cafe" href="menu.html">Jetzt vorbestellen</a>
+          <a class="btn-light" id="hero-second" href="login.html">Mitglied werden</a>
         </div>
       </div>
-    </div>
+    </header>
+
+    <!--------------------------------------------------------Beliebt----------------------------------------------------->
+    <section class="home-section">
+      <div class="home-inner">
+        <h2 class="home-title">Beliebt diese Woche</h2>
+        <p class="home-sub">Das bestellen unsere Gäste gerade am häufigsten.</p>
+        <div class="popular" id="popular"></div>
+        <p class="center"><a class="btn-ghost" href="menu.html">Ganze Speisekarte ansehen</a></p>
+      </div>
+    </section>
+
+    <!--------------------------------------------------------So funktioniert's------------------------------------------->
+    <section class="home-section paper">
+      <div class="home-inner">
+        <h2 class="home-title">So funktioniert's</h2>
+        <ol class="steps">
+          <li><h3>Online bestellen</h3><p>Such dir Kaffee und Kuchen aus und wähl eine Abholzeit – frühestens in 15 Minuten.</p></li>
+          <li><h3>Wir bereiten zu</h3><p>Du siehst live in deinem Konto, wann deine Bestellung in Arbeit und abholbereit ist.</p></li>
+          <li><h3>Abholen &amp; Punkte sammeln</h3><p>Ohne Warten abholen, an der Theke bezahlen. Für jeden Euro gibt's einen Punkt.</p></li>
+        </ol>
+      </div>
+    </section>
+
+    <!--------------------------------------------------------Treueprogramm---------------------------------------------->
+    <section class="home-section">
+      <div class="home-inner">
+        <h2 class="home-title">Treueprogramm</h2>
+        <p class="home-sub" id="loyalty-sub">Kostenlos Mitglied werden, Punkte sammeln, gratis genießen.</p>
+        <div class="tiers">
+          <div class="tier-col Bronze"><h3>Bronze</h3><p class="need">ab 0 Punkten</p><ul><li>1 Punkt pro Euro</li><li>Gratis Gebäck ab 50 Punkten</li><li>Gratis Kaffee ab 100 Punkten</li></ul></div>
+          <div class="tier-col Silver"><h3>Silver</h3><p class="need">ab 200 Punkten</p><ul><li>5 % Rabatt auf jede Bestellung</li><li>Gratis Kuchen ab 250 Punkten</li></ul></div>
+          <div class="tier-col Gold"><h3>Gold</h3><p class="need">ab 500 Punkten</p><ul><li>10 % Rabatt auf jede Bestellung</li><li>Gratis Kaffee an deinem Geburtstag</li></ul></div>
+        </div>
+        <p class="center" id="loyalty-cta"><a class="btn-cafe" href="login.html">Kostenlos Mitglied werden</a></p>
+      </div>
+    </section>
 
     <!--------------------------------------------------------Über uns Section--------------------------------------------->
     <section class="about" id="ueber-uns">
@@ -125,22 +94,32 @@
           <h2>Über uns</h2>
           <p>Willkommen im Café El Sasu in Krefeld! Wir haben dieses Café gegründet, um einen Ort zu schaffen, an dem sich unsere Gäste wohlfühlen, entspannen und hochwertige Getränke und Speisen genießen können.</p>
           <p>Bei uns treffen traditionelle Rezepte auf kreative, moderne Ideen. Wir setzen auf regionale Produkte, nachhaltige Konzepte und einen freundlichen, persönlichen Service – damit jeder Besuch etwas Besonderes ist.</p>
-          <p>Neu: Bestell online vor, hol deinen Kaffee ohne Warten ab und sammle bei jedem Einkauf Punkte für Gratis-Kaffee und Kuchen.</p>
           <p class="owners">Görkem Sari &amp; Miraç Subaşı</p>
         </div>
         <img src="photos/background10.jpg" alt="Die Fassade des Café El Sasu mit Markise und Bistrotisch" loading="lazy" />
       </div>
+      <div class="gallery">
+        <img src="photos/slide1.jpg" alt="Terrasse mit Bistrotischen und Blick über die Stadt" loading="lazy" />
+        <img src="photos/slide2.jpg" alt="Der Gastraum mit Theke im Abendlicht" loading="lazy" />
+        <img src="photos/slide3.jpg" alt="Balkonplätze mit Vorhängen und Pflanzen" loading="lazy" />
+      </div>
     </section>
 
-    <!--------------------------------------------------------Map Section-------------------------------------------------->
-    <section class="map-section">
-      <h2>So findest du uns</h2>
-      <iframe title="Karte: Café el Sasu in Krefeld" loading="lazy" src="https://www.google.com/maps?q=47799+Krefeld&amp;z=14&amp;output=embed"></iframe>
-      <p class="buttons">
-        <a class="btn-cafe" target="_blank" rel="noopener"
-           href="https://www.google.com/maps/search/?api=1&query=Caf%C3%A9+el+Sasu+Krefeld">★ Bewerte uns auf Google</a>
-        <a class="btn-cafe" href="menu.html">Jetzt vorbestellen</a>
-      </p>
+    <!--------------------------------------------------------Besuch uns-------------------------------------------------->
+    <section class="home-section">
+      <div class="home-inner visit">
+        <div>
+          <h2 class="home-title left">Besuch uns</h2>
+          <p>Einestraße 1a, 47799 Krefeld</p>
+          <table class="hours" id="hours">
+            <tr data-days="2,3,4,5"><th>Dienstag – Freitag</th><td>11 – 22 Uhr</td></tr>
+            <tr data-days="6,0"><th>Samstag – Sonntag</th><td>10 – 24 Uhr</td></tr>
+            <tr data-days="1"><th>Montag</th><td>Ruhetag</td></tr>
+          </table>
+          <a class="btn-cafe" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&amp;query=Caf%C3%A9+el+Sasu+Krefeld">Bewerte uns auf Google</a>
+        </div>
+        <iframe title="Karte: Café el Sasu in Krefeld" loading="lazy" src="https://www.google.com/maps?q=47799+Krefeld&amp;z=14&amp;output=embed"></iframe>
+      </div>
     </section>
 
     <!--------------------------------------------------------Footer Section------------------------------------------------->
@@ -148,15 +127,12 @@
       <p class="footer-name">Cafe El Sasu</p>
       <p>Einestraße 1a , 47799 Krefeld</p>
       <p>Email: info@cafe-elsasu.de | Phone: +49 02151 8220</p>
-      <p>
-        Follow us: <a href="#">Facebook</a> | <a href="#">Instagram</a> |
-        <a href="#">TikTok</a>
-      </p>
       <p>&copy; Inhaber: Görkem Sari & Mirac Subasi · <a href="credits.html">Bildnachweise</a></p>
     </div>
 
     <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
     <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
     <script src="app.js"></script>
+    <script src="home.js"></script>
   </body>
 </html>

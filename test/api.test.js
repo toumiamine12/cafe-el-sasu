@@ -306,3 +306,20 @@ test('account routes need login', async () => {
   assert.equal((await client()('PATCH', '/api/me', { name: 'x' })).status, 401);
   assert.equal((await client()('POST', '/api/me/password', { current: 'a', next: 'bbbbbb' })).status, 401);
 });
+
+// --- home page ---------------------------------------------------------------
+
+test('status reports open/closed with next change and next pickup', async () => {
+  const s = (await client()('GET', '/api/status')).body;
+  assert.equal(typeof s.open, 'boolean');
+  assert.ok(!isNaN(new Date(s.changes_at)));
+  assert.ok(new Date(s.changes_at) > new Date());
+  assert.equal(validatePickup(new Date(s.next_pickup)), null);
+});
+
+test('popular returns up to 4 active items, best sellers first', async () => {
+  const list = (await client()('GET', '/api/popular')).body;
+  assert.equal(list.length, 4);
+  assert.ok(list.every((i) => i.active === 1 && i.sold >= 0));
+  assert.ok(list[0].sold >= list[3].sold);
+});

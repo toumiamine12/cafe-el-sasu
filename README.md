@@ -12,6 +12,12 @@ Built with **Node.js, Express and SQLite** (`node:sqlite`). The frontend is plai
 
 ## Features
 
+**Startseite**
+- Live status: "Jetzt geöffnet · bis 22:00 Uhr" or when it opens next, plus the earliest pickup time
+- "Beliebt diese Woche": the real top 4 best-sellers of the last 7 days, addable to the cart
+- How it works in 3 steps, loyalty tiers (highlights your own tier when logged in), "repeat last order" button
+- Über uns with photo gallery, map and opening hours with today highlighted
+
 **Customers**
 - Register and get a member ID (`SASU-1007`, …); log in with the member ID or email
 - Menu of 49 items laid out like a printed café menu: sticky category bar, search, item popup with quantity, allergen/vegan tags, floating cart bar
@@ -42,7 +48,7 @@ Needs Node.js 22.13 or newer.
 ```bash
 npm install
 npm start          # http://localhost:3000
-npm test           # 36 API + rules tests
+npm test           # 39 API + rules tests
 ```
 
 The database (`data/cafe.db`) is created and filled with demo data on first start. Delete `data/` to reset.

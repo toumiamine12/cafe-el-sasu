@@ -47,3 +47,14 @@ export function priceOrder(lines, reward, discountPct) {
 }
 
 export const pointsFor = (totalCents) => Math.floor(totalCents / 100);
+
+// Next time the café opens or closes, on the 15-minute grid, within a week.
+export function nextChange(now = new Date()) {
+  const open = isOpenAt(now);
+  const t = new Date(Math.ceil(now / 900e3) * 900e3);
+  if (t.getTime() === now.getTime()) t.setTime(t.getTime() + 900e3);
+  for (const end = now.getTime() + 7 * 864e5; t < end; t.setTime(t.getTime() + 900e3)) {
+    if (isOpenAt(t) !== open) return t;
+  }
+  return null;
+}
