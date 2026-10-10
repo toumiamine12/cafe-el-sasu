@@ -180,11 +180,11 @@ export function createApp(db) {
 
   // Friendly stats only: what the member saved and enjoyed, never what they spent.
   const withStats = (u) => {
-    const { saved_cents, rewards_redeemed } = q(`SELECT COALESCE(SUM(discount_cents), 0) saved_cents, COUNT(reward_id) rewards_redeemed
+    const { saved_cents, rewards_redeemed, orders } = q(`SELECT COALESCE(SUM(discount_cents), 0) saved_cents, COUNT(reward_id) rewards_redeemed, COUNT(*) orders
       FROM orders WHERE user_id = ? AND status = 'picked_up'`).get(u.id);
     const fav = q(`SELECT m.name FROM order_items oi JOIN orders o ON o.id = oi.order_id JOIN menu_items m ON m.id = oi.menu_item_id
       WHERE o.user_id = ? AND o.status != 'cancelled' GROUP BY m.id ORDER BY SUM(oi.qty) DESC LIMIT 1`).get(u.id);
-    return { ...publicUser(u), stats: { saved_cents, rewards_redeemed, favorite: fav?.name ?? null } };
+    return { ...publicUser(u), stats: { saved_cents, rewards_redeemed, orders, favorite: fav?.name ?? null } };
   };
 
   // 200 + null when logged out, so pages can check login without a console error.

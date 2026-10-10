@@ -182,6 +182,7 @@ export function renderNav(user) {
     ? `${isStaff ? '<a class="mobile-only" href="#/admin">Dashboard</a>' : `<a class="mobile-only" href="#/konto">Mein Konto (${first})</a>`}<button class="mobile-only logout" type="button" data-logout>Ausloggen</button>`
     : '<a class="mobile-only" href="#/login">Login / Mitglied werden</a>');
   updateCartBadge();
+  orderPulse();
 }
 
 // --- account dropdown ---------------------------------------------------------
@@ -221,6 +222,38 @@ addEventListener('keydown', (e) => {
   closeUserMenu();
   document.querySelector('.nav-user .nav-pill').focus();
 });
+
+// --- live order pulse: a banner on every page when an order is ready -----------------------
+// Guests with open orders are checked every 15 s; the check stops when nothing is open.
+let pulseTimer;
+const dismissed = () => { try { return JSON.parse(sessionStorage.getItem('sasu.ready-seen')) || []; } catch { return []; } };
+export async function orderPulse() {
+  clearTimeout(pulseTimer);
+  const user = session.user;
+  if (!user || user.role !== 'customer') return showReady([]);
+  let orders;
+  try { orders = await api('/api/orders'); } catch { return; }
+  const open = orders.filter((o) => ['new', 'preparing', 'ready'].includes(o.status));
+  showReady(open.filter((o) => o.status === 'ready' && !dismissed().includes(o.id)));
+  if (open.length) pulseTimer = setTimeout(orderPulse, 15000);
+}
+function showReady(ready) {
+  let bar = document.getElementById('ready-banner');
+  if (!ready.length) return bar?.remove();
+  if (!bar) {
+    bar = document.body.appendChild(document.createElement('div'));
+    bar.id = 'ready-banner';
+    bar.setAttribute('role', 'alert');
+    bar.addEventListener('click', (e) => {
+      if (!e.target.closest('[data-dismiss]')) return;
+      try { sessionStorage.setItem('sasu.ready-seen', JSON.stringify([...dismissed(), ...JSON.parse(bar.dataset.ids)])); } catch {}
+      bar.remove();
+    });
+  }
+  bar.dataset.ids = JSON.stringify(ready.map((o) => o.id));
+  bar.innerHTML = `<strong>Dein Kaffee ist ready!</strong> <span>${esc(orderName(ready[0]))} – Express-Abholung am Tresen.</span>
+    <button type="button" data-dismiss aria-label="Hinweis schließen">×</button>`;
+}
 
 // Any element with data-add="<menu item id or name>" adds that item to the cart.
 document.addEventListener('click', async (e) => {

@@ -1,0 +1,14 @@
+{
+  "name": "Café el Sasu",
+  "short_name": "el Sasu",
+  "description": "Kaffee vorbestellen, Punkte sammeln, Mitgliedskarte immer dabei.",
+  "start_url": "/#/konto",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f9ead6",
+  "theme_color": "#3b2615",
+  "lang": "de",
+  "icons": [
+    { "src": "photos/logo.png", "sizes": "832x832", "type": "image/png", "purpose": "any" }
+  ]
+}

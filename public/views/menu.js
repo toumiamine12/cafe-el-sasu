@@ -1,5 +1,5 @@
 // Speisekarte: menu sections per category, search, item dialog, floating cart bar.
-import { euro, esc, cart, toast, getMenu, unitPrice } from '../app.js';
+import { api, euro, esc, cart, toast, getMenu, unitPrice, session } from '../app.js';
 
 const CATEGORIES = [
   ['coffee', 'Kaffee', 'Heiß und frisch aus der Siebträgermaschine'],
@@ -12,6 +12,9 @@ const tags = (i) => i.tags.split(',').filter(Boolean)
   .map((t) => `<span class="tag ${esc(t)}">${esc(TAG_LABELS[t] || t)}</span>`).join('');
 
 let spy = null;
+// Vegan view: tagged vegan, or a drink that can be made with plant milk.
+const PLANT = ['Hafermilch', 'Mandelmilch'];
+const veganOk = (i) => i.tags.split(',').includes('vegan') || i.modifiers.some((g) => g.name === 'Milch' && g.options.some((o) => PLANT.includes(o.name)));
 
 export default {
   title: 'Speisekarte',
@@ -24,7 +27,8 @@ export default {
 
     function render() {
       const term = $('search').value.trim().toLowerCase();
-      const match = (i) => !term || (i.name + ' ' + i.description).toLowerCase().includes(term);
+      const vegan = $('vegan-only').getAttribute('aria-pressed') === 'true';
+      const match = (i) => (!term || (i.name + ' ' + i.description).toLowerCase().includes(term)) && (!vegan || veganOk(i));
       const sections = CATEGORIES.map(([key, title, sub]) => {
         const list = items.filter((i) => i.category === key && match(i));
         if (!list.length) return '';
@@ -64,6 +68,14 @@ export default {
     }, { rootMargin: '-150px 0px -55% 0px' });
 
     $('search').addEventListener('input', render);
+    $('vegan-only').addEventListener('click', () => {
+      $('vegan-only').setAttribute('aria-pressed', $('vegan-only').getAttribute('aria-pressed') !== 'true');
+      render();
+    });
+    const user = await session.get();
+    const prefs = user?.role === 'customer' ? user.preferences : null;
+    if (prefs?.vegan_only) $('vegan-only').setAttribute('aria-pressed', 'true');
+    $('dlg-fav').hidden = !prefs; // favorites are for logged-in guests
 
     // --- dialog ---
     const chosenMods = () => [...root.querySelectorAll('#dlg-mods input:checked')].map((i) => Number(i.value)).filter(Boolean);
@@ -78,9 +90,12 @@ export default {
         const type = g.kind === 'one' ? 'radio' : 'checkbox';
         const none = g.kind === 'one' && !g.required
           ? `<label class="mod-pill"><input type="radio" name="g${g.id}" value="0" checked /><span>Ohne</span></label>` : '';
+        // Preferred milk (or a plant milk in vegan mode) instead of the default.
+        const wanted = g.name === 'Milch' && (prefs?.milk ?? ($('vegan-only').getAttribute('aria-pressed') === 'true' ? 'Hafermilch' : null));
+        const pick = (o) => (wanted && g.options.some((x) => x.name === wanted) ? o.name === wanted : o.is_default);
         return `<fieldset class="mod-group"><legend>${esc(g.name)}${g.required ? '' : ' <small>optional</small>'}</legend>
           <div class="mod-pills">${none}${g.options.map((o) => `
-            <label class="mod-pill"><input type="${type}" name="g${g.id}" value="${o.id}" ${o.is_default ? 'checked' : ''} />
+            <label class="mod-pill"><input type="${type}" name="g${g.id}" value="${o.id}" ${pick(o) ? 'checked' : ''} />
               <span>${esc(o.name)} <small>${price(o.price_cents)}</small></span></label>`).join('')}</div></fieldset>`;
       }).join('');
     }
@@ -93,12 +108,22 @@ export default {
       $('dlg-desc').textContent = item.description;
       $('dlg-tags').innerHTML = tags(item);
       renderMods(item);
+      $('dlg-fav').textContent = '☆';
+      $('dlg-fav').classList.remove('on');
       updateDialogButton();
       $('item-dialog').showModal();
     }
     $('dlg-minus').addEventListener('click', () => { qty = Math.max(1, qty - 1); updateDialogButton(); });
     $('dlg-plus').addEventListener('click', () => { qty = Math.min(20, qty + 1); updateDialogButton(); });
     $('dlg-close').addEventListener('click', () => $('item-dialog').close());
+    $('dlg-fav').addEventListener('click', async () => {
+      try {
+        await api('/api/me/favorites', { method: 'POST', body: { menu_item_id: current.id, mods: chosenMods() } });
+        $('dlg-fav').textContent = '★';
+        $('dlg-fav').classList.add('on');
+        toast('Als Favorit gespeichert – in deinem Konto mit einem Klick bestellbar');
+      } catch (err) { toast(err.message); }
+    });
     $('item-dialog').addEventListener('click', (e) => { if (e.target === e.currentTarget) e.currentTarget.close(); });
     $('dlg-add').addEventListener('click', () => {
       cart.add(current.id, qty, chosenMods());

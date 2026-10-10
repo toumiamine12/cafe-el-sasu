@@ -32,7 +32,11 @@ export default {
           </div>
         </div>`).join('');
       const subtotal = lines.reduce((s, l) => s + unitPrice(l.item, l.mods) * l.qty, 0);
-      $('totals').innerHTML = `<span class="muted">Zwischensumme</span> <span class="total">${euro(subtotal)}</span>`;
+      // Tier discount shown up front; the server applies it again (and rewards/gifts) when the order is placed.
+      const pct = session.user?.tier?.discountPct ?? 0;
+      const off = Math.floor((subtotal * pct) / 100);
+      $('totals').innerHTML = `<div><span class="muted">Zwischensumme</span> <span class="total">${euro(subtotal)}</span></div>`
+        + (pct ? `<div class="tier-line">${session.user.tier.name}-Rabatt −${pct} %: −${euro(off)} · <strong>${euro(subtotal - off)}</strong></div>` : '');
     }
 
     $('cart-lines').addEventListener('click', (e) => {
@@ -51,8 +55,10 @@ export default {
           items: cart.get(),
           pickup_at: $('pickup').value,
           reward_id: $('reward').value ? Number($('reward').value) : undefined,
+          gift_code: $('gift-code').value.trim() || undefined,
         } });
         cart.set([]);
+        try { sessionStorage.removeItem('sasu.gift'); } catch {}
         await session.refresh(); // points may have been spent on a reward
         go('#/konto?placed=1'); // the account page thanks for the newest order
       } catch (err) {
@@ -80,11 +86,20 @@ export default {
     // Full 15-minute windows stay visible but can't be picked.
     $('pickup').innerHTML = slots.map((s) => `<option value="${s.at}" ${s.full ? 'disabled' : ''}>${fmtSlot.format(new Date(s.at))} Uhr${s.full ? ' – Ausgebucht' : s.left <= 2 ? ` – noch ${s.left} frei` : ''}</option>`).join('')
       || '<option value="">Gerade keine Abholzeit verfügbar</option>';
-    const firstFree = slots.find((s) => !s.full);
+    // "Das Übliche" remembers the usual pickup time: preselect the next free slot at that time.
+    let usual = null;
+    try { usual = sessionStorage.getItem('sasu.time'); } catch {}
+    const hm = (iso) => new Date(iso).toLocaleTimeString('de-DE', { timeZone: 'Europe/Berlin', hour: '2-digit', minute: '2-digit' });
+    const firstFree = (usual && slots.find((s) => !s.full && hm(s.at) === usual)) || slots.find((s) => !s.full);
     if (firstFree) $('pickup').value = firstFree.at;
     else $('place').disabled = true;
     $('reward').innerHTML += rewards.filter((r) => r.cost_points <= user.points)
       .map((r) => `<option value="${r.id}">${esc(r.name)} (${r.cost_points} Punkte)</option>`).join('');
+    // A gift link puts the code here; one reward or one gift per order.
+    try { $('gift-code').value = sessionStorage.getItem('sasu.gift') ?? ''; } catch {}
+    const syncGift = () => { $('reward').disabled = !!$('gift-code').value.trim(); if ($('reward').disabled) $('reward').value = ''; };
+    $('gift-code').addEventListener('input', syncGift);
+    syncGift();
     $('discount-note').textContent = user.tier.discountPct
       ? `Als ${user.tier.name}-Mitglied bekommst du ${user.tier.discountPct}% Rabatt.`
       : `Du hast ${user.points} Punkte. Ab 200 Punkten gibt's 5% Rabatt.`;

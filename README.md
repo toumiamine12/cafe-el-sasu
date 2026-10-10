@@ -31,10 +31,25 @@ Built with **Node.js, Express and SQLite** (`node:sqlite`). The frontend is plai
 - Account page: welcome banner, member card with QR code (tap to enlarge at the counter), stats (orders, total spent, favorite), full purchase history with receipts, reorder in one click
 - Edit name, email and birthday; change password (signs out other devices)
 
+**Speed dial**
+- "Das Übliche": the guest's most-ordered exact drink (with options) as a one-tap hero button; checkout preselects their usual pickup time
+- Favorites: star any customised drink in the item popup; one tap from the account puts it in the cart
+- Preferences: preferred milk preselected in every drink, optional vegan-only Speisekarte
+
+**Live order pulse**
+- Progress bar Eingegangen → In Zubereitung → Abholbereit with a countdown to pickup
+- "Dein Kaffee ist ready!" banner on every page the moment an order is ready
+
+**Bean subscription & gifts**
+- Bohnen-Abo: whole beans (Espresso, Filter, Decaf; 250 g / 1 kg) reserved every 1, 2 or 4 weeks for pickup; pause, skip or cancel; staff see what's due
+- Kaffee verschenken: a coffee-of-choice voucher paid with 100 points or 5 € at the counter (staff activate it); shared as link + QR via WhatsApp / e-mail; the friend redeems it at checkout
+
 **Loyalty**
 - 1 point per €1, credited when the order is picked up
 - Tiers by lifetime points: **Bronze** → **Silver** (200, 5 % off) → **Gold** (500, 10 % off)
-- Rewards: free pastry (50), free coffee (100), free cake (250), birthday coffee for Gold members
+- Rewards: free pastry (50), free coffee (100), free cake (250), birthday coffee for every member during their birthday week (with a banner)
+- Treuepass: stamp card towards the next reward ("noch etwa 3 Bestellungen bis Gratis Kuchen"); tier card with the discount that's applied automatically
+- "Karte aufs Handy": the member card with QR as a phone-sized image, and the site can be added to the home screen (web app manifest). Real Apple/Google Wallet passes need paid developer accounts and aren't included
 - Redeeming never drops your tier; cancelling refunds the reward points
 
 **Item options**
@@ -80,7 +95,7 @@ Needs Node.js 22.13 or newer.
 ```bash
 npm install
 npm start          # http://localhost:3000
-npm test           # 92 API + rules tests
+npm test           # 104 API + rules tests
 ```
 
 The database (`data/cafe.db`) is created and filled with demo data on first start. Delete `data/` to reset.

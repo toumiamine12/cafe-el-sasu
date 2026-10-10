@@ -8,8 +8,9 @@ import account from './views/account.js';
 import admin from './views/admin.js';
 import credits from './views/credits.js';
 import password from './views/password.js';
+import gift from './views/gift.js';
 
-const ROUTES = { '': home, speisekarte: menu, warenkorb: cartView, login, konto: account, admin, bildnachweise: credits, passwort: password };
+const ROUTES = { '': home, speisekarte: menu, warenkorb: cartView, login, konto: account, admin, bildnachweise: credits, passwort: password, gutschein: gift };
 
 export const roleHome = (user) => (user.role === 'customer' ? '#/konto' : '#/admin');
 

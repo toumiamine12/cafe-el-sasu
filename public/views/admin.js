@@ -57,7 +57,7 @@ export default {
     const fail = (el) => (err) => { if (alive()) el.innerHTML = `<p class="error">${esc(err.message)}</p>`; };
 
     // --- tabs ---------------------------------------------------------------------
-    const LOADERS = { kitchen: loadKitchen, soldout: loadSoldOut, finance: loadFinance, menu: loadMenu, team: loadTeam, shifts: loadShifts, rota: loadRota, mytime: loadMyTime };
+    const LOADERS = { kitchen: loadKitchen, soldout: loadSoldOut, beans: loadBeans, finance: loadFinance, menu: loadMenu, team: loadTeam, shifts: loadShifts, rota: loadRota, mytime: loadMyTime };
     $('admin-tabs').addEventListener('click', (e) => {
       const tab = e.target.dataset.tab;
       if (!tab) return;
@@ -129,6 +129,7 @@ export default {
     // --- kitchen display: member lookup (typed, USB scanner or camera) -------------------
     async function lookup(memberId) {
       const box = $('lookup-result');
+      if (/^G-/i.test(memberId.trim())) return lookupGift(memberId.trim().toUpperCase());
       try {
         const m = await api(`/api/admin/members/${encodeURIComponent(memberId.trim())}`);
         if (!alive()) return;
@@ -145,6 +146,24 @@ export default {
       }
       box.hidden = false;
     }
+    // Gift codes (G-…): see the gift; activate it once paid at the counter.
+    const GIFT_STATE = { pending: 'wartet auf Bezahlung', active: 'einlösbar', redeemed: 'eingelöst', cancelled: 'storniert' };
+    async function lookupGift(code) {
+      const box = $('lookup-result');
+      box.dataset.member = '';
+      try {
+        const g = await api(`/api/admin/gifts/${encodeURIComponent(code)}`);
+        if (!alive()) return;
+        box.innerHTML = `<div class="member-hit">
+            <div><strong>Gutschein für ${esc(g.recipient_name)}</strong> <small>${esc(g.code)} · von ${esc(g.sender.name)} · ${GIFT_STATE[g.status]}</small></div>
+            <button class="kds-btn" type="button" id="lookup-close" aria-label="Schließen">×</button></div>
+          ${g.status === 'pending' ? `<button class="kds-go" type="button" data-activate="${esc(g.code)}">5,00 € kassiert – Gutschein aktivieren</button>` : ''}`;
+      } catch (err) {
+        box.innerHTML = `<div class="member-hit miss"><span>${esc(err.message)}</span><button class="kds-btn" type="button" id="lookup-close" aria-label="Schließen">×</button></div>`;
+      }
+      box.hidden = false;
+    }
+
     $('lookup-form').addEventListener('submit', (e) => {
       e.preventDefault();
       const id = $('lookup-id').value.trim();
@@ -152,7 +171,12 @@ export default {
       lookup(id);
       $('lookup-id').value = '';
     });
-    $('lookup-result').addEventListener('click', (e) => {
+    $('lookup-result').addEventListener('click', async (e) => {
+      const code = e.target.dataset.activate;
+      if (code) {
+        try { await api(`/api/admin/gifts/${encodeURIComponent(code)}/activate`, { method: 'POST' }); toast('Gutschein aktiviert'); lookupGift(code); } catch (err) { toast(err.message); }
+        return;
+      }
       if (e.target.id === 'lookup-close') { $('lookup-result').hidden = true; $('lookup-result').dataset.member = ''; }
     });
 
@@ -226,6 +250,27 @@ export default {
         e.target.closest('.soldout-row, tr')?.classList.toggle('is-out', !!item.sold_out);
         toast(item.sold_out ? `${item.name}: ausverkauft` : `${item.name}: wieder verfügbar`);
       } catch (err) { toast(err.message); e.target.checked = !e.target.checked; }
+    });
+
+    // --- bean subscriptions due ----------------------------------------------------------------
+    const BEAN = { espresso: 'Espresso', filter: 'Filter', decaf: 'Entkoffeiniert' };
+    async function loadBeans() {
+      const due = await api('/api/admin/beans?days=7').catch(fail($('bean-due')));
+      if (!due || !alive()) return;
+      const today = dayKey(new Date());
+      $('bean-due').innerHTML = due.length ? due.map((b) => `
+        <div class="row-line">
+          <div class="grow"><strong>${esc(b.name)}</strong> <span class="muted">${esc(b.member_id)}</span><br />
+            ${BEAN[b.bean]} · ${b.size === '1kg' ? '1 kg' : '250 g'} · ${euro(b.price_cents)} ·
+            <span class="${b.next_pickup <= today ? 'status ready' : 'muted'}">${b.next_pickup < today ? 'überfällig' : b.next_pickup === today ? 'heute' : fmtShort.format(new Date(`${b.next_pickup}T12:00:00`))}</span></div>
+          <button class="btn-cafe" type="button" data-handed="${b.id}">Ausgegeben</button>
+        </div>`).join('') : '<p class="muted">Diese Woche ist keine Tüte fällig.</p>';
+    }
+    $('bean-due').addEventListener('click', async (e) => {
+      const id = e.target.dataset.handed;
+      if (!id) return;
+      e.target.disabled = true;
+      try { await api(`/api/admin/beans/${id}/handed`, { method: 'POST' }); toast('Ausgegeben – nächste Abholung geplant'); loadBeans(); } catch (err) { toast(err.message); e.target.disabled = false; }
     });
 
     // --- finance (owner) ------------------------------------------------------------------

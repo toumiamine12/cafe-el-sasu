@@ -45,7 +45,9 @@ export default {
       $('hero-second').href = '#/admin';
       return;
     }
-    $('loyalty-sub').textContent = `Du bist ${user.tier.name}-Mitglied mit ${user.points} Punkten.`;
+    $('loyalty-sub').textContent = user.birthday_week
+      ? `Alles Gute zum Geburtstag, ${user.name.split(' ')[0]}! Dein Geburtstagskaffee wartet im Warenkorb.`
+      : `Du bist ${user.tier.name}-Mitglied mit ${user.points} Punkten.`;
     $('loyalty-cta').innerHTML = user.tier.next
       ? `<a class="btn-cafe" href="#/konto">Noch ${user.tier.next - user.lifetime_points} Punkte bis ${user.tier.name === 'Bronze' ? 'Silver' : 'Gold'} – zu deinem Konto</a>`
       : '<a class="btn-cafe" href="#/konto">Zu deinem Konto</a>';
