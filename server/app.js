@@ -889,8 +889,11 @@ export function createApp(db) {
   const FOOD = new Set(['cake', 'pastry', 'beans']); // 7 % VAT; drinks 19 %
   const WEEKDAY = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
   const WALKIN_EMAIL = 'gast@cafe-elsasu.de';
-  const berlinHourOf = (iso) => Number(new Date(iso).toLocaleString('en-US', { timeZone: 'Europe/Berlin', hour: 'numeric', hourCycle: 'h23' }));
-  const berlinDayOf = (iso) => new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Europe/Berlin' });
+  // Cached formatters: toLocaleString with a timeZone builds a new one per call (seconds for a month of orders).
+  const HOUR_FMT = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Berlin', hour: 'numeric', hourCycle: 'h23' });
+  const DAY_FMT = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Berlin' });
+  const berlinHourOf = (iso) => Number(HOUR_FMT.format(new Date(iso)));
+  const berlinDayOf = (iso) => DAY_FMT.format(new Date(iso));
   const plusDays = (date, n) => new Date(Date.parse(`${date}T12:00:00Z`) + n * 864e5).toISOString().slice(0, 10);
   const isDate = (v) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && !isNaN(Date.parse(v)) && new Date(v).toISOString().startsWith(v);
 

@@ -67,7 +67,12 @@ Built with **Node.js, Express and SQLite** (`node:sqlite`). The frontend is plai
 - Member lookup: scan the member-card QR (camera via the browser's BarcodeDetector, or a USB scanner) or type the SASU number to see that guest's open orders
 - "Ausverkauft" switches: sold-out items stay on the Speisekarte, greyed out, and can't be ordered
 - Clock in/out, hours per person for the last 7 and 30 days
-- Admin only: revenue, wage cost, profit, order count, average order value, top 5 items (today / 7 / 30 days)
+- Admin only: **Finanzen** dashboard for Heute / 7 / 30 days or any custom range (up to 92 days)
+  - KPI cards: Brutto-Umsatz, Netto-Gewinn (revenue − wages), Personalkosten and their share of revenue, orders and average order value, discounts and redeemed rewards
+  - Charts (plain SVG, hover tooltips, table view): revenue vs. wage cost over time, Peak-Stunden, revenue by category (donut), top 10 items; slowest items, most popular extras, online vs. counter orders
+  - VAT estimate (7 % food and beans, 19 % drinks), rules-based tips (staffing for the rush, wage share, plant milk stock, slow sellers)
+  - Bericht exportieren: CSV for Excel with totals, VAT, wages, result and one row per day; Drucken / PDF via a print layout
+  - Money is integer cents end to end; wage cost = net shift minutes × hourly wage (`GET /api/admin/analytics`, `GET /api/admin/report.csv`)
 - Admin only: full menu editor (name, description, category, price, allergen tags, photo path or https URL), hide/show, delete (never-ordered items are removed, ordered ones hidden)
 - Admin only: staff management — create staff with a temporary password (changed at first login), set hourly wages, deactivate accounts (signs them out, ends a running shift)
 - Admin only: shift table with clock-in/out, hours and wage cost per shift and per employee
@@ -95,7 +100,7 @@ Needs Node.js 22.13 or newer.
 ```bash
 npm install
 npm start          # http://localhost:3000
-npm test           # 108 API + rules tests
+npm test           # 118 API + rules tests
 ```
 
 The database (`data/cafe.db`) is created and filled with demo data on first start. Delete `data/` to reset.
@@ -104,9 +109,13 @@ The database (`data/cafe.db`) is created and filled with demo data on first star
 
 | Role | Login | Password |
 |---|---|---|
-| Demo customer | `SASU-1004` or `mehmet@example.com` | `demo123` |
-| Admin | `SASU-1000` | `ADMIN_PASSWORD` env var |
-| Staff (7) | `SASU-1001`, `SASU-1002`, `SASU-1007` … `SASU-1011` | `STAFF_PASSWORD` env var |
+| Demo customer | `SASU-1004`, `mehmet@example.com` or the username | `demo123` |
+| Admin (Leyla Aksoy) | `SASU-1000` or the username | `ADMIN_PASSWORD` env var |
+| Staff (7) | `SASU-1001`, `SASU-1002`, `SASU-1007` … `SASU-1011` or the username | `STAFF_PASSWORD` env var |
+
+Every account also gets a username `vorname.nachname` + 4 random digits (e.g. `leyla.aksoy4821`), shown in the profile and the staff list; the staff/admin usernames are printed in the terminal on first start.
+
+The demo data includes a month of history (~1.000 € a day, counter and online orders), today's service with 5 orders each Eingegangen / In Zubereitung / Abholbereit / Abgeholt, and 5 bean subscriptions.
 
 Staff and admin passwords are never stored in the code. Set them as environment variables; if they're missing on first start, the server generates random ones and prints them once in the terminal.
 

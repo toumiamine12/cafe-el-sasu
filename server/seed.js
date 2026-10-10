@@ -104,6 +104,13 @@ const USERS = [
   ['SASU-1006', 'Laufkundschaft', 'gast@cafe-elsasu.de', null, 'customer', 0, 0, 0, null],
 ];
 
+// Regulars who preorder online (no usable password) – about a third of the history.
+const REGULARS = ['Jonas Fischer', 'Laura Weber', 'Emre Arslan', 'Hannah Meyer', 'Lukas Koch', 'Mia Bauer', 'Ali Yilmaz', 'Lea Klein',
+  'Felix Wolff', 'Zeynep Şahin', 'Noah Neumann', 'Emma Schwarz', 'Ben Zimmermann', 'Clara Braun', 'Can Öztürk', 'Marie Krüger',
+  'David Hartmann', 'Julia Lange', 'Elias Schmitt', 'Lina Werner'];
+// Berlin opening hours weighted like a real day: morning coffee, lunch, afternoon cake (UTC = Berlin − 2 in summer).
+const RUSH_HOURS = [7, 7, 8, 8, 8, 9, 10, 10, 11, 11, 12, 13, 13, 14, 14, 15, 16, 17];
+
 const daysAgo = (d, hour) => {
   const t = new Date(Date.now() - d * 864e5);
   t.setUTCHours(hour, 0, 0, 0);
@@ -148,6 +155,7 @@ export function seed(db) {
     const u = db.prepare(`INSERT INTO users (member_id, name, email, password_hash, role, hourly_wage, lifetime_points, points, birthday, username)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
     for (const [mid, n, e, p, role, wage, life, pts, bd] of USERS) u.run(mid, n, e, p ? hashPassword(pw[p] ?? p) : 'x:x', role, wage, life, pts, bd, newUsername(db, n));
+    const regulars = REGULARS.map((n, k) => Number(u.run(`SASU-${1012 + k}`, n, `${n.split(' ')[0].toLowerCase()}.${1012 + k}@example.com`, 'x:x', 'customer', 0, 0, 0, null, newUsername(db, n)).lastInsertRowid));
 
     // A month of history: orders from the 3 demo customers, shifts for the 2 staff.
     // Demo customers get their tier discount, and every 4th day one of their orders redeems a matching reward.
@@ -158,17 +166,33 @@ export function seed(db) {
       VALUES (?, ?, 'picked_up', ?, ?, ?, ?, ?)`);
     const oi = db.prepare('INSERT INTO order_items (order_id, menu_item_id, qty, unit_price_cents) VALUES (?, ?, ?, ?)');
     const s = db.prepare('INSERT INTO shifts (user_id, clock_in, clock_out) VALUES (?, ?, ?)');
+    // Milk drinks get a milk choice (mostly whole milk, every 4th oat or almond) so the stats have something to count.
+    const milkOf = db.prepare(`SELECT o.id, o.name, o.price_cents, o.is_default FROM menu_item_modifier_groups l
+      JOIN modifier_groups g ON g.id = l.group_id AND g.name = 'Milch' JOIN modifier_options o ON o.group_id = g.id WHERE l.menu_item_id = ?`);
+    const om = db.prepare("INSERT INTO order_item_modifiers (order_item_id, option_id, group_name, name, price_cents) VALUES (?, ?, 'Milch', ?, ?)");
+    const pickMilk = (itemId, h) => {
+      const opts = milkOf.all(itemId);
+      if (!opts.length) return null;
+      const want = h % 8 === 0 ? 'Hafermilch' : h % 8 === 4 ? 'Mandelmilch' : null;
+      return opts.find((x) => x.name === want) ?? opts.find((x) => x.is_default) ?? opts[0];
+    };
+    const walkIn = db.prepare("SELECT id FROM users WHERE member_id = 'SASU-1006'").get().id;
     for (let d = 1; d <= 30; d++) {
-      const guestOrders = 14 + ((d * 7) % 9);
-      for (const [n, userId] of [[4, 4], [5, 5], [6, 6], ...Array.from({ length: guestOrders }, (_, k) => [k + 10, 7])]) {
-        if (userId < 7 && (d + userId) % 3) continue;
+      const guestOrders = 80 + ((d * 7) % 25); // about 1.000 € a day
+      for (const [n, userId] of [[4, 4], [5, 5], [6, 6], ...Array.from({ length: guestOrders }, (_, k) => [k + 10, k % 3 ? walkIn : regulars[(d + k) % regulars.length]])]) {
+        const guest = userId === walkIn || regulars.includes(userId);
+        if (!guest && (d + userId) % 3) continue;
         const picks = [items[(d * n) % items.length], items[(d + n * 7) % items.length]];
-        const lines = picks.map((i) => ({ ...i, qty: 1 }));
-        const reward = userId < 7 && d % 4 === 0 ? rewards.find((r) => lines.some((l) => l.category === r.category_allowed)) : null;
+        const milk = picks.map((i, k) => pickMilk(i.id, d + n + k));
+        const lines = picks.map((i, k) => ({ ...i, price_cents: i.price_cents + (milk[k]?.price_cents ?? 0), qty: 1 }));
+        const reward = !guest && d % 4 === 0 ? rewards.find((r) => lines.some((l) => l.category === r.category_allowed)) : null;
         const price = priceOrder(lines, reward ?? null, TIER_PCT[userId] ?? 0);
-        const at = daysAgo(d, 7 + (n % 11)); // 9–19 Uhr Berlin in summer time
+        const at = daysAgo(d, RUSH_HOURS[(n * 7 + d) % RUSH_HOURS.length]);
         const { lastInsertRowid } = o.run(userId, at, price.subtotal, price.discount, price.total, reward?.id ?? null, at);
-        for (const i of picks) oi.run(lastInsertRowid, i.id, 1, i.price_cents);
+        lines.forEach((l, k) => {
+          const line = oi.run(lastInsertRowid, l.id, 1, l.price_cents).lastInsertRowid;
+          if (milk[k]) om.run(line, milk[k].id, milk[k].name, milk[k].price_cents);
+        });
       }
       if (d % 7 !== 0) s.run(2 + (d % 2), daysAgo(d, 9), daysAgo(d, 17));
     }
@@ -201,6 +225,8 @@ export function seed(db) {
     seedToday(db);
     seedBeans(db);
   });
+  const staff = db.prepare("SELECT username, role FROM users WHERE role IN ('admin','staff') ORDER BY member_id").all();
+  console.log(`Benutzernamen – Admin: ${staff.filter((u) => u.role === 'admin').map((u) => u.username).join(', ')} · Personal: ${staff.filter((u) => u.role === 'staff').map((u) => u.username).join(', ')}`);
 }
 
 // --- today's demo service: 5 orders each Eingegangen / In Zubereitung / Abholbereit / Abgeholt --------
@@ -251,6 +277,11 @@ function seedToday(db) {
   for (let t = Math.floor(now / 900e3) * 900e3 - 900e3; past.length < 5; t -= 900e3) {
     if (isOpenAt(new Date(t))) past.push(new Date(t).toISOString());
   }
+  // today's early shift (Elif) is still running, so "Heute" has labor cost too
+  const today = new Date(now).toLocaleDateString('en-CA', { timeZone: 'Europe/Berlin' });
+  const open = berlinTime(today, 8.5).getTime(), close = berlinTime(today, 20.5).getTime();
+  db.prepare("INSERT INTO shifts (user_id, clock_in, clock_out) SELECT id, ?, ? FROM users WHERE member_id = 'SASU-1009'")
+    .run(new Date(Math.min(open, now - 3600e3)).toISOString(), now > close ? new Date(close).toISOString() : null);
   const lena = db.prepare("SELECT id FROM users WHERE member_id = 'SASU-1001'").get().id;
   const event = db.prepare('INSERT INTO order_events (order_id, user_id, status, at) VALUES (?, ?, ?, ?)');
   const plan = [

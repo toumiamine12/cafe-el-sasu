@@ -199,7 +199,12 @@ export function openDb(file = 'data/cafe.db') {
   for (const [table, col, def] of LATER_COLUMNS) {
     if (!db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`);
   }
-  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS users_username ON users(username)');
+  db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS users_username ON users(username);
+    CREATE INDEX IF NOT EXISTS order_items_order ON order_items(order_id);
+    CREATE INDEX IF NOT EXISTS order_item_modifiers_item ON order_item_modifiers(order_item_id);
+    CREATE INDEX IF NOT EXISTS orders_pickup ON orders(pickup_at);
+    CREATE INDEX IF NOT EXISTS orders_user ON orders(user_id);
+    CREATE INDEX IF NOT EXISTS shifts_clock_in ON shifts(clock_in);`);
   const setting = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
   for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) setting.run(key, value());
   if (!db.prepare('SELECT COUNT(*) n FROM menu_items').get().n) seed(db);

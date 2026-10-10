@@ -352,6 +352,7 @@
               <div><label for="p-email">E-Mail</label><input id="p-email" type="email" autocomplete="email" required /></div>
               <div><label for="p-birthday">Geburtstag</label><input id="p-birthday" type="date" /></div>
               <div><label for="p-member">Mitgliedsnummer</label><input id="p-member" readonly /></div>
+              <div><label for="p-username">Benutzername</label><input id="p-username" readonly /></div>
             </div>
             <p class="error" id="profile-error" role="alert"></p>
             <button class="btn-cafe" type="submit">Änderungen speichern</button>
@@ -425,16 +426,65 @@
           <div id="bean-due"></div>
         </section>
 
-        <section class="panel" data-panel="finance" hidden>
-          <h2>Finanzen</h2>
-          <div class="tabs" id="range">
-            <button data-range="day">Heute</button>
-            <button data-range="week" aria-pressed="true">7 Tage</button>
-            <button data-range="month">30 Tage</button>
+        <section class="panel fin" data-panel="finance" hidden>
+          <div class="panel-head">
+            <h2>Finanzen</h2>
+            <div class="fin-actions">
+              <a class="btn-ghost" id="fin-csv" href="#">Bericht exportieren (CSV)</a>
+              <button class="btn-ghost" type="button" id="fin-print">Drucken / PDF</button>
+            </div>
           </div>
-          <div class="stats" id="stats"></div>
-          <h3>Top 5 Artikel</h3>
-          <div id="top"></div>
+          <div class="fin-range">
+            <div class="tabs" id="range">
+              <button data-range="day">Heute</button>
+              <button data-range="week" aria-pressed="true">Letzte 7 Tage</button>
+              <button data-range="month">Letzte 30 Tage</button>
+              <button data-range="custom">Benutzerdefiniert</button>
+            </div>
+            <form class="fin-custom" id="fin-custom" hidden>
+              <label for="fin-from">Von</label><input id="fin-from" type="date" required />
+              <label for="fin-to">Bis</label><input id="fin-to" type="date" required />
+              <button class="btn-cafe" type="submit">Anzeigen</button>
+            </form>
+            <p class="muted fin-period" id="fin-period"></p>
+          </div>
+          <div class="stats kpis" id="fin-kpis"></div>
+          <div class="fin-grid">
+            <figure class="fin-card wide">
+              <figcaption><h3>Umsatz und Personalkosten</h3><span class="legend"><i class="sw s1"></i>Umsatz <i class="sw s2 line"></i>Personalkosten</span></figcaption>
+              <div class="chart" id="ch-timeline"></div>
+              <details class="as-table"><summary>Als Tabelle</summary><div class="table-scroll" id="tb-timeline"></div></details>
+            </figure>
+            <figure class="fin-card">
+              <figcaption><h3>Peak-Stunden</h3><span class="muted">abgeholte Bestellungen je Stunde</span></figcaption>
+              <div class="chart" id="ch-hours"></div>
+            </figure>
+            <figure class="fin-card">
+              <figcaption><h3>Umsatz nach Kategorie</h3></figcaption>
+              <div class="donut-wrap"><div class="chart" id="ch-categories"></div><ul class="cat-legend" id="lg-categories"></ul></div>
+            </figure>
+            <figure class="fin-card wide">
+              <figcaption><h3>Top 10 Artikel nach Umsatz</h3></figcaption>
+              <div class="chart" id="ch-top"></div>
+            </figure>
+            <div class="fin-card">
+              <h3>Langsamste Artikel</h3>
+              <ol class="fin-list" id="ls-slow"></ol>
+              <h3>Beliebteste Extras</h3>
+              <ol class="fin-list" id="ls-mods"></ol>
+            </div>
+            <div class="fin-card">
+              <h3>Bestellwege</h3>
+              <div class="split" id="ch-channels"></div>
+              <h3>Mehrwertsteuer <small class="muted">(Schätzung)</small></h3>
+              <table class="fin-vat" id="tb-vat"></table>
+            </div>
+            <div class="fin-card wide">
+              <h3>Hinweise für Ihr Café</h3>
+              <ul class="insights" id="ls-insights"></ul>
+            </div>
+          </div>
+          <div class="chart-tip" id="chart-tip" role="status" hidden></div>
         </section>
 
         <section class="panel" data-panel="menu" hidden>

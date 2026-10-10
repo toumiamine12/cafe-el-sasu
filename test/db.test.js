@@ -72,3 +72,13 @@ test('demo data: 5 orders in each state today, 5 bean subscriptions, usernames f
   assert.match(db.prepare("SELECT username FROM users WHERE member_id = 'SASU-1000'").get().username, /^leyla\.aksoy\d{4}$/);
   assert.ok(today);
 });
+
+test('demo history: walk-in orders belong to Laufkundschaft, not staff; labor below revenue', () => {
+  const db = openDb(':memory:');
+  assert.equal(db.prepare("SELECT COUNT(*) n FROM orders o JOIN users u ON u.id = o.user_id WHERE u.role IN ('staff','admin')").get().n, 0);
+  const walkin = db.prepare("SELECT COUNT(*) n FROM orders o JOIN users u ON u.id = o.user_id WHERE u.member_id = 'SASU-1006'").get().n;
+  assert.ok(walkin > 1000, `walk-in orders: ${walkin}`);
+  const plant = db.prepare("SELECT COUNT(*) n FROM order_item_modifiers WHERE name IN ('Hafermilch','Mandelmilch')").get().n;
+  const milk = db.prepare("SELECT COUNT(*) n FROM order_item_modifiers WHERE group_name = 'Milch'").get().n;
+  assert.ok(plant > 0 && plant / milk < 0.5, `plant ${plant}/${milk}`);
+});

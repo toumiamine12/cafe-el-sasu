@@ -216,7 +216,7 @@ test('clock toggles one shift at a time', async () => {
   assert.equal((await yusuf('POST', '/api/admin/shifts/clock')).body.open, true);
   assert.equal((await yusuf('POST', '/api/admin/shifts/clock')).body.open, false);
   assert.equal(db.prepare('SELECT COUNT(*) n FROM shifts WHERE user_id = 3').get().n, before + 1);
-  assert.equal(db.prepare('SELECT COUNT(*) n FROM shifts WHERE clock_out IS NULL').get().n, 0);
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM shifts WHERE clock_out IS NULL AND user_id = 3').get().n, 0);
   const mine = (await yusuf('GET', '/api/admin/shifts')).body;
   assert.equal(mine.length, 1);
   assert.equal(mine[0].member_id, 'SASU-1002');

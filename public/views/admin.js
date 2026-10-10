@@ -1,6 +1,7 @@
 // Dashboard for staff and the owner: kitchen display, sold-out switches, finances,
 // menu editor, staff management, shifts and own working time.
 import { api, euro, esc, toast, session, modBadges, whenLabel } from '../app.js';
+import { mountFinance } from './finance.js';
 
 const fmtClock = new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', hour: '2-digit', minute: '2-digit' });
 const fmtDateTime = new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
@@ -273,27 +274,9 @@ export default {
       try { await api(`/api/admin/beans/${id}/handed`, { method: 'POST' }); toast('Ausgegeben – nächste Abholung geplant'); loadBeans(); } catch (err) { toast(err.message); e.target.disabled = false; }
     });
 
-    // --- finance (owner) ------------------------------------------------------------------
-    let range = 'week';
-    async function loadFinance() {
-      const f = await api(`/api/admin/finance?range=${range}`).catch(fail($('stats')));
-      if (!f || !alive()) return;
-      const stat = (label, value, cls = '') => `<div class="stat"><div class="label">${label}</div><div class="value ${cls}">${value}</div></div>`;
-      $('stats').innerHTML = stat('Umsatz', euro(f.revenue)) + stat('Personalkosten', euro(f.wages))
-        + stat('Ergebnis', euro(f.profit), f.profit < 0 ? 'neg' : '') + stat('Bestellungen', f.orders)
-        + stat('Ø Bon', f.orders ? euro(Math.round(f.revenue / f.orders)) : '—');
-      const max = Math.max(1, ...f.top.map((t) => t.qty));
-      $('top').innerHTML = f.top.map((t) => `
-        <div class="row-line"><div style="width:180px">${esc(t.name)}</div>
-          <div class="grow"><div class="bar" style="width:${(t.qty / max) * 100}%"></div></div><strong>${t.qty}×</strong></div>`).join('')
-        || '<p class="muted">Noch keine Verkäufe in diesem Zeitraum.</p>';
-    }
-    $('range').addEventListener('click', (e) => {
-      if (!e.target.dataset.range) return;
-      range = e.target.dataset.range;
-      $('range').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', b === e.target));
-      loadFinance();
-    });
+    // --- finance (owner): see finance.js ---------------------------------------------------------------
+    let finance;
+    function loadFinance() { (finance ??= mountFinance(root, alive)).load(); }
 
     // --- menu editor (owner) ---------------------------------------------------------------
     let menuItems = [];
@@ -384,7 +367,7 @@ export default {
       $('team-table').innerHTML = `
         <thead><tr><th>Name</th><th>Rolle</th><th>Stundenlohn</th><th>Status</th><th>Aktiv</th></tr></thead>
         <tbody>${team.map((u) => `<tr class="${u.active ? '' : 'is-hidden'}">
-          <td><strong>${esc(u.name)}</strong><div class="muted small">${esc(u.member_id)} · ${esc(u.email)}</div></td>
+          <td><strong>${esc(u.name)}</strong><div class="muted small">${esc(u.username ?? '')} · ${esc(u.member_id)} · ${esc(u.email)}</div></td>
           <td>${u.role === 'admin' ? 'Inhaberin' : 'Personal'}</td>
           <td><input class="wage" type="number" step="0.01" min="0" value="${(u.hourly_wage / 100).toFixed(2)}" data-wage="${u.id}" aria-label="Stundenlohn ${esc(u.name)}" /> €</td>
           <td>${u.on_shift ? '<span class="status ready">Im Dienst</span>' : u.must_change_password ? '<span class="status">Erstes Login offen</span>' : '<span class="muted">—</span>'}</td>
@@ -410,7 +393,7 @@ export default {
           name: $('sf-name').value, email: $('sf-email').value, password: $('sf-pw').value, hourly_wage: cents($('sf-wage').value),
         } });
         e.target.reset();
-        toast(`${u.name} angelegt (${u.member_id}) – Passwort beim ersten Login ändern`);
+        toast(`${u.name} angelegt (Benutzername ${u.username}) – Passwort beim ersten Login ändern`);
         loadTeam();
       } catch (err) { $('sf-error').textContent = err.message; }
     });

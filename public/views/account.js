@@ -221,6 +221,7 @@ export default {
       $('p-email').value = user.email;
       $('p-birthday').value = user.birthday || '';
       $('p-member').value = user.member_id;
+      $('p-username').value = user.username ?? '';
       $('pf-vegan').checked = user.preferences.vegan_only;
       $('pf-milk').value = user.preferences.milk ?? '';
     }
