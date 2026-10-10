@@ -133,7 +133,7 @@ export default {
     }
 
     try {
-      items = await getMenu();
+      items = await getMenu({ fresh: true });
     } catch {
       if (alive()) $('menu-root').innerHTML = '<p class="menu-empty panel error">Die Speisekarte konnte nicht geladen werden. Bitte Seite neu laden.</p>';
       return;

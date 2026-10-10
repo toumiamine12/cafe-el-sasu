@@ -7,15 +7,17 @@ import login from './views/login.js';
 import account from './views/account.js';
 import admin from './views/admin.js';
 import credits from './views/credits.js';
+import password from './views/password.js';
 
-const ROUTES = { '': home, speisekarte: menu, warenkorb: cartView, login, konto: account, admin, bildnachweise: credits };
+const ROUTES = { '': home, speisekarte: menu, warenkorb: cartView, login, konto: account, admin, bildnachweise: credits, passwort: password };
 
 export const roleHome = (user) => (user.role === 'customer' ? '#/konto' : '#/admin');
 
-// auth: undefined = public, 'customer' = logged-in guest, 'staff' = staff or admin.
+// auth: undefined = public, 'user' = any login, 'customer' = logged-in guest, 'staff' = staff or admin.
 // guestsOnly: public page that staff/admin don't use (the cart) — they go to the dashboard instead.
 const isStaff = (user) => !!user && user.role !== 'customer';
 export const allowed = (view, user) => {
+  if (view.auth === 'user') return !!user;
   if (view.auth === 'customer') return !!user && !isStaff(user);
   if (view.auth === 'staff') return isStaff(user);
   return !(view.guestsOnly && isStaff(user));
@@ -23,7 +25,7 @@ export const allowed = (view, user) => {
 
 export function routeFor(hash) {
   const [path = '', query = ''] = hash.replace(/^#\/?/, '').split('?');
-  return { path, view: ROUTES[path], params: new URLSearchParams(query) };
+  return { path, view: Object.hasOwn(ROUTES, path) ? ROUTES[path] : undefined, params: new URLSearchParams(query) };
 }
 
 export function go(hash) {
@@ -44,6 +46,8 @@ async function render() {
   const user = view.auth ? await session.refresh() : await session.get();
   if (token !== seq) return; // a newer navigation started meanwhile
   if (view.auth && !user) return go(`#/login?next=${encodeURIComponent('#/' + path)}`);
+  // A temporary password must be replaced before anything else.
+  if (user?.must_change_password && path !== 'passwort') return go('#/passwort');
   if (!allowed(view, user)) return go(roleHome(user));
 
   const id = ++mountId;
@@ -62,5 +66,10 @@ async function render() {
 
 addEventListener('hashchange', render);
 addEventListener('sessionchange', render); // e.g. logout from the navbar while on the Startseite
+addEventListener('sessionexpired', async () => {
+  await session.refresh();
+  const { path, view } = routeFor(location.hash);
+  if (view?.auth) go(`#/login?next=${encodeURIComponent('#/' + path)}`);
+});
 session.get().then(renderNav);
 render();

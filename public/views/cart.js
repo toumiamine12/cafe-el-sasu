@@ -61,7 +61,7 @@ export default {
       }
     });
 
-    menu = await getMenu();
+    menu = await getMenu({ fresh: true });
     if (!alive()) return;
     cart.set(cart.get().filter((l) => menu.some((m) => m.id === l.id)));
     renderCart();
@@ -71,8 +71,12 @@ export default {
       $('order-form').innerHTML = '<p>Bitte <a href="#/login?next=%23%2Fwarenkorb">einloggen oder registrieren</a>, um vorzubestellen und Punkte zu sammeln.</p>';
       return;
     }
-    const [slots, rewards] = await Promise.all([api('/api/pickup-availability'), api('/api/rewards')]);
+    const [slots, rewards, status] = await Promise.all([api('/api/pickup-availability'), api('/api/rewards'), api('/api/status')]);
     if (!alive()) return;
+    if (status.orders_paused) {
+      $('error').textContent = 'Online-Bestellungen sind gerade pausiert. Bitte versuch es in ein paar Minuten noch einmal.';
+      $('place').disabled = true;
+    }
     // Full 15-minute windows stay visible but can't be picked.
     $('pickup').innerHTML = slots.map((s) => `<option value="${s.at}" ${s.full ? 'disabled' : ''}>${fmtSlot.format(new Date(s.at))} Uhr${s.full ? ' – Ausgebucht' : s.left <= 2 ? ` – noch ${s.left} frei` : ''}</option>`).join('')
       || '<option value="">Gerade keine Abholzeit verfügbar</option>';

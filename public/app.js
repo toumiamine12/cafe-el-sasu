@@ -8,6 +8,8 @@ export async function api(path, { method = 'GET', body } = {}) {
     body: method === 'GET' ? undefined : JSON.stringify(body ?? {}),
   });
   const data = await res.json().catch(() => ({}));
+  // Session gone (logged out elsewhere, deactivated, expired): let the router send us to the login.
+  if (res.status === 401 && !['/api/login', '/api/me/password'].includes(path)) dispatchEvent(new Event('sessionexpired'));
   if (!res.ok) throw Object.assign(new Error(data.error || 'Fehler'), { status: res.status });
   return data;
 }
@@ -42,9 +44,12 @@ export const orderIsPlural = (o) => o.items.reduce((n, i) => n + i.qty, 0) > 1;
 
 export const ROLE_LABEL = { customer: 'Kunde', staff: 'Personal', admin: 'Admin' };
 
-// Menu is fetched once per visit and shared by every view.
+// Menu cache shared by the views; pages that show stock (menu, cart) ask for a fresh copy so "Ausverkauft" is current.
 let menuPromise;
-export const getMenu = () => (menuPromise ||= api('/api/menu').catch((e) => { menuPromise = null; throw e; }));
+export const getMenu = ({ fresh = false } = {}) => {
+  if (fresh) menuPromise = null;
+  return (menuPromise ||= api('/api/menu').catch((e) => { menuPromise = null; throw e; }));
+};
 
 // --- cart: [{ id, qty, mods: [optionId…] }] in localStorage ------------------------
 // The same item with different options (oat milk vs. whole milk) is a separate line.

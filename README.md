@@ -37,11 +37,25 @@ Built with **Node.js, Express and SQLite** (`node:sqlite`). The frontend is plai
 - Rewards: free pastry (50), free coffee (100), free cake (250), birthday coffee for Gold members
 - Redeeming never drops your tier; cancelling refunds the reward points
 
+**Item options**
+- Milk (Vollmilch, Hafer +0,50 €, Mandel +0,50 €, Laktosefrei +0,30 €), syrup (+0,40 €), extra shot (+0,80 €), ice level
+- Picked in the item popup with a live price; shown as badges in the cart, receipts and the kitchen display
+- Prices and options are validated on the server and copied onto each order line (later price changes don't touch old receipts); a reward makes the base price free, options are still charged
+
+**Pickup capacity**
+- At most 5 orders per 15-minute window (owner can change it); full windows show as "Ausgebucht" in checkout
+- Checked inside the same write transaction as the order, so two guests can't take the last place
+
 **Staff & admin** (`#/admin`)
-- Order queue: Eingegangen → In Zubereitung → Abholbereit → Abgeholt
+- Kitchen display: high-contrast ticket grid with big pickup times, customer names and bright option badges (HAFERMILCH, EXTRA SHOT); one tap moves a ticket Neu → In Arbeit → Abholbereit → Abgeholt
+- Rush controls for staff: pause online orders, or push the earliest pickup from 15 to 30 minutes
+- Member lookup: scan the member-card QR (camera via the browser's BarcodeDetector, or a USB scanner) or type the SASU number to see that guest's open orders
+- "Ausverkauft" switches: sold-out items stay on the Speisekarte, greyed out, and can't be ordered
 - Clock in/out, hours per person for the last 7 and 30 days
 - Admin only: revenue, wage cost, profit, order count, average order value, top 5 items (today / 7 / 30 days)
-- Admin only: edit prices, hide items, add new items
+- Admin only: full menu editor (name, description, category, price, allergen tags, photo path or https URL), hide/show, delete (never-ordered items are removed, ordered ones hidden)
+- Admin only: staff management — create staff with a temporary password (changed at first login), set hourly wages, deactivate accounts (signs them out, ends a running shift)
+- Admin only: shift table with clock-in/out, hours and wage cost per shift and per employee
 
 **Security**
 - scrypt-hashed passwords (min. 8 characters), HttpOnly SameSite session cookies (Secure in production)
@@ -59,7 +73,7 @@ Needs Node.js 22.13 or newer.
 ```bash
 npm install
 npm start          # http://localhost:3000
-npm test           # 48 API + rules tests
+npm test           # 78 API + rules tests
 ```
 
 The database (`data/cafe.db`) is created and filled with demo data on first start. Delete `data/` to reset.

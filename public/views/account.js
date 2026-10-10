@@ -197,7 +197,7 @@ export default {
     }
 
     // Member card QR: tap to show it big at the counter.
-    root.addEventListener('click', (e) => {
+    $('card').addEventListener('click', (e) => { // on the card itself: <main> outlives this view
       if (e.target.closest('#qr-open')) {
         $('qr-mid').textContent = user.member_id;
         $('qr-dialog').showModal();

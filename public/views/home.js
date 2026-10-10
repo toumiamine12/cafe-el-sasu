@@ -19,7 +19,9 @@ export default {
       $('live-status').innerHTML = s.open
         ? `<span class="dot open"></span>Jetzt geöffnet · bis ${time} Uhr`
         : `<span class="dot"></span>Gerade geschlossen${change ? ` · öffnet ${at(change)}` : ''}`;
-      $('next-pickup').textContent = `Früheste Abholung: ${at(new Date(s.next_pickup))}`;
+      $('next-pickup').textContent = s.orders_paused
+        ? 'Online-Bestellungen sind gerade pausiert – vor Ort sind wir für dich da.'
+        : `Früheste Abholung: ${at(new Date(s.next_pickup))}`;
     }).catch(() => { if (alive()) $('live-status').textContent = 'Di – Fr 11 – 22 Uhr · Sa – So 10 – 24 Uhr'; });
 
     api('/api/popular').then((items) => {

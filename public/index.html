@@ -312,30 +312,52 @@
     </template>
 
     <template id="tpl-admin">
-      <div class="page" style="max-width:1100px">
-
-      <div id="dash">
+      <div class="dash">
         <div class="tabs" id="admin-tabs" role="tablist">
-          <button data-tab="orders" aria-pressed="true">Bestellungen</button>
-          <button data-tab="staff">Personal</button>
+          <button data-tab="kitchen" aria-pressed="true">Küche</button>
+          <button data-tab="soldout">Ausverkauft</button>
           <button data-tab="finance" data-admin>Finanzen</button>
           <button data-tab="menu" data-admin>Speisekarte</button>
+          <button data-tab="team" data-admin>Mitarbeiter</button>
+          <button data-tab="shifts" data-admin>Schichten</button>
+          <button data-tab="mytime">Meine Zeit</button>
         </div>
 
-        <section class="panel" data-panel="orders">
-          <h2>Offene Bestellungen</h2>
-          <div id="open-orders" aria-live="polite"></div>
+        <section class="kds" data-panel="kitchen">
+          <div class="kds-bar">
+            <button class="kds-toggle" id="t-pause" type="button" aria-pressed="false">
+              <strong>Online-Bestellungen</strong><span id="t-pause-state">Aktiv</span>
+            </button>
+            <button class="kds-toggle" id="t-delay" type="button" aria-pressed="false">
+              <strong>Rush: +15 min</strong><span id="t-delay-state">Aus</span>
+            </button>
+            <form class="kds-lookup" id="lookup-form" autocomplete="off">
+              <label for="lookup-id" class="sr-only">Mitgliedsnummer</label>
+              <input id="lookup-id" placeholder="Karte scannen oder SASU-Nummer" />
+              <button class="kds-btn" type="submit">Suchen</button>
+              <button class="kds-btn" type="button" id="scan-btn" hidden>Kamera</button>
+            </form>
+          </div>
+          <div id="lookup-result" hidden></div>
+          <div class="kds-grid" id="open-orders" aria-live="polite"></div>
         </section>
 
-        <section class="panel" data-panel="staff" hidden>
-          <h2>Arbeitszeit</h2>
-          <p><button class="btn-cafe" id="clock"></button></p>
-          <table class="table" id="staff-table"></table>
+        <dialog class="scan-dialog" id="scan-dialog" aria-labelledby="scan-title">
+          <h2 id="scan-title">Mitgliedskarte scannen</h2>
+          <video id="scan-video" playsinline muted></video>
+          <p class="muted" id="scan-hint">Halte den QR-Code der Karte vor die Kamera.</p>
+          <button class="btn-cafe" type="button" id="scan-close">Abbrechen</button>
+        </dialog>
+
+        <section class="panel" data-panel="soldout" hidden>
+          <h2>Ausverkauft</h2>
+          <p class="muted">Ausverkaufte Artikel bleiben auf der Speisekarte sichtbar, können aber nicht bestellt werden.</p>
+          <div id="soldout-list"></div>
         </section>
 
         <section class="panel" data-panel="finance" hidden>
           <h2>Finanzen</h2>
-          <div class="tabs" id="range" style="justify-content:flex-start">
+          <div class="tabs" id="range">
             <button data-range="day">Heute</button>
             <button data-range="week" aria-pressed="true">7 Tage</button>
             <button data-range="month">30 Tage</button>
@@ -346,18 +368,83 @@
         </section>
 
         <section class="panel" data-panel="menu" hidden>
-          <h2>Speisekarte verwalten</h2>
-          <form id="new-item" class="form-cafe stats">
-            <div><label for="ni-name">Name</label><input id="ni-name" required /></div>
-            <div><label for="ni-cat">Kategorie</label>
-              <select id="ni-cat"><option value="coffee">Kaffee</option><option value="cold">Kalt</option><option value="cake">Kuchen</option><option value="pastry">Gebäck</option></select></div>
-            <div><label for="ni-price">Preis (€)</label><input id="ni-price" type="number" step="0.01" min="0.01" required /></div>
-            <div><label>&nbsp;</label><button class="btn-cafe" type="submit">Hinzufügen</button></div>
+          <div class="panel-head"><h2>Speisekarte verwalten</h2><button class="btn-cafe" type="button" id="new-item">Neuer Artikel</button></div>
+          <div class="table-scroll"><table class="table admin-table" id="menu-table"></table></div>
+        </section>
+
+        <dialog class="edit-dialog" id="item-editor" aria-labelledby="ed-title">
+          <form id="editor-form" class="form-cafe" method="dialog">
+            <h2 id="ed-title">Artikel bearbeiten</h2>
+            <div class="form-row">
+              <div><label for="ed-name">Name</label><input id="ed-name" required maxlength="80" /></div>
+              <div><label for="ed-price">Preis (€)</label><input id="ed-price" type="number" step="0.01" min="0.01" required /></div>
+              <div><label for="ed-cat">Kategorie</label>
+                <select id="ed-cat"><option value="coffee">Kaffee</option><option value="cold">Kalt</option><option value="cake">Kuchen</option><option value="pastry">Gebäck</option></select></div>
+            </div>
+            <label for="ed-desc">Beschreibung</label>
+            <input id="ed-desc" maxlength="300" />
+            <fieldset class="tag-boxes"><legend>Hinweise</legend>
+              <label><input type="checkbox" value="vegan" /> vegan</label>
+              <label><input type="checkbox" value="gluten" /> Gluten</label>
+              <label><input type="checkbox" value="nuts" /> Nüsse</label>
+              <label><input type="checkbox" value="lactose" /> Laktose</label>
+            </fieldset>
+            <label for="ed-photo">Foto (photos/… oder https://…)</label>
+            <div class="photo-row"><input id="ed-photo" /><img id="ed-preview" alt="" /></div>
+            <p class="error" id="ed-error" role="alert"></p>
+            <div class="login-actions"><button class="btn-cafe" type="submit" id="ed-save">Speichern</button><button class="btn-ghost" type="button" id="ed-cancel">Abbrechen</button></div>
           </form>
-          <table class="table" id="menu-table"></table>
+        </dialog>
+
+        <section class="panel" data-panel="team" hidden>
+          <h2>Mitarbeiterverwaltung</h2>
+          <form id="staff-form" class="form-cafe staff-form">
+            <div><label for="sf-name">Name</label><input id="sf-name" required /></div>
+            <div><label for="sf-email">E-Mail</label><input id="sf-email" type="email" required /></div>
+            <div><label for="sf-pw">Temporäres Passwort</label><input id="sf-pw" minlength="8" required autocomplete="new-password" /></div>
+            <div><label for="sf-wage">Stundenlohn (€)</label><input id="sf-wage" type="number" step="0.01" min="0" required /></div>
+            <div><label>&nbsp;</label><button class="btn-cafe" type="submit">Anlegen</button></div>
+          </form>
+          <p class="error" id="sf-error" role="alert"></p>
+          <div class="table-scroll"><table class="table admin-table" id="team-table"></table></div>
+        </section>
+
+        <section class="panel" data-panel="shifts" hidden>
+          <h2>Schichten &amp; Personalkosten</h2>
+          <div class="tabs" id="shift-range">
+            <button data-range="day">Heute</button>
+            <button data-range="week" aria-pressed="true">7 Tage</button>
+            <button data-range="month">30 Tage</button>
+          </div>
+          <div class="stats" id="shift-totals"></div>
+          <div class="table-scroll"><table class="table admin-table" id="shift-table"></table></div>
+        </section>
+
+        <section class="panel" data-panel="mytime" hidden>
+          <h2>Meine Arbeitszeit</h2>
+          <p><button class="btn-cafe" id="clock"></button></p>
+          <div class="stats" id="my-hours"></div>
         </section>
       </div>
-    </div>
+    </template>
+
+    <template id="tpl-passwort">
+      <div class="page" style="max-width:480px">
+        <section class="panel">
+          <h2>Eigenes Passwort festlegen</h2>
+          <p class="muted">Dein Konto wurde mit einem vorläufigen Passwort angelegt. Bitte lege jetzt dein eigenes fest.</p>
+          <form id="pw-form" class="form-cafe">
+            <label for="pw-old">Vorläufiges Passwort</label>
+            <input id="pw-old" type="password" autocomplete="current-password" required />
+            <label for="pw-new">Neues Passwort (mind. 8 Zeichen)</label>
+            <input id="pw-new" type="password" autocomplete="new-password" minlength="8" required />
+            <label for="pw-new2">Neues Passwort wiederholen</label>
+            <input id="pw-new2" type="password" autocomplete="new-password" minlength="8" required />
+            <p class="error" id="pw-error" role="alert"></p>
+            <button class="btn-cafe wide" type="submit">Passwort speichern</button>
+          </form>
+        </section>
+      </div>
     </template>
 
     <template id="tpl-bildnachweise">
