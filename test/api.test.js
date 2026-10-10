@@ -267,13 +267,15 @@ test('birthday coffee can be redeemed once per year', async () => {
 
 // --- account ----------------------------------------------------------------
 
-test('me includes purchase stats', async () => {
+test('me includes friendly stats: saved money, free treats, favorite — never total spent', async () => {
   const c = await login('SASU-1004', 'demo123');
   const me = (await c('GET', '/api/me')).body;
-  const row = db.prepare("SELECT COUNT(*) n, SUM(total_cents) s FROM orders WHERE user_id = 5 AND status = 'picked_up'").get();
-  assert.equal(me.stats.orders, row.n);
-  assert.equal(me.stats.spent_cents, row.s);
+  const row = db.prepare(`SELECT COALESCE(SUM(discount_cents), 0) saved, COUNT(reward_id) treats
+    FROM orders WHERE user_id = 5 AND status = 'picked_up'`).get();
+  assert.equal(me.stats.saved_cents, row.saved);
+  assert.equal(me.stats.rewards_redeemed, row.treats);
   assert.ok(me.stats.favorite);
+  assert.equal(me.stats.spent_cents, undefined);
 });
 
 test('profile update changes name, email, birthday', async () => {

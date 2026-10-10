@@ -94,12 +94,13 @@ export function createApp(db) {
     res.clearCookie('sid').json({ ok: true });
   });
 
+  // Friendly stats only: what the member saved and enjoyed, never what they spent.
   const withStats = (u) => {
-    const { orders, spent_cents } = q(`SELECT COUNT(*) orders, COALESCE(SUM(total_cents), 0) spent_cents FROM orders
-      WHERE user_id = ? AND status = 'picked_up'`).get(u.id);
+    const { saved_cents, rewards_redeemed } = q(`SELECT COALESCE(SUM(discount_cents), 0) saved_cents, COUNT(reward_id) rewards_redeemed
+      FROM orders WHERE user_id = ? AND status = 'picked_up'`).get(u.id);
     const fav = q(`SELECT m.name FROM order_items oi JOIN orders o ON o.id = oi.order_id JOIN menu_items m ON m.id = oi.menu_item_id
       WHERE o.user_id = ? AND o.status != 'cancelled' GROUP BY m.id ORDER BY SUM(oi.qty) DESC LIMIT 1`).get(u.id);
-    return { ...publicUser(u), stats: { orders, spent_cents, favorite: fav?.name ?? null } };
+    return { ...publicUser(u), stats: { saved_cents, rewards_redeemed, favorite: fav?.name ?? null } };
   };
 
   // 200 + null when logged out, so pages can check login without a console error.

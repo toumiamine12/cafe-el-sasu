@@ -1,5 +1,6 @@
 // Demo data so a fresh install has a full menu, accounts and some history.
 import { hashPassword, tx } from './db.js';
+import { priceOrder } from './rules.js';
 
 // [name, description, category, price_cents, photo, tags]
 const MENU = [
@@ -92,9 +93,12 @@ export function seed(db) {
     for (const [mid, n, e, pw, role, wage, life, pts, bd] of USERS) u.run(mid, n, e, pw ? hashPassword(pw) : 'x:x', role, wage, life, pts, bd);
 
     // A month of history: orders from the 3 demo customers, shifts for the 2 staff.
-    const items = db.prepare('SELECT id, price_cents FROM menu_items').all();
-    const o = db.prepare(`INSERT INTO orders (user_id, pickup_at, status, subtotal_cents, discount_cents, total_cents, created_at)
-      VALUES (?, ?, 'picked_up', ?, 0, ?, ?)`);
+    // Demo customers get their tier discount, and every 4th day one of their orders redeems a matching reward.
+    const items = db.prepare('SELECT id, price_cents, category FROM menu_items').all();
+    const rewards = db.prepare('SELECT * FROM rewards WHERE birthday_only = 0').all();
+    const TIER_PCT = { 5: 5, 6: 10 };
+    const o = db.prepare(`INSERT INTO orders (user_id, pickup_at, status, subtotal_cents, discount_cents, total_cents, reward_id, created_at)
+      VALUES (?, ?, 'picked_up', ?, ?, ?, ?, ?)`);
     const oi = db.prepare('INSERT INTO order_items (order_id, menu_item_id, qty, unit_price_cents) VALUES (?, ?, ?, ?)');
     const s = db.prepare('INSERT INTO shifts (user_id, clock_in, clock_out) VALUES (?, ?, ?)');
     for (let d = 1; d <= 30; d++) {
@@ -102,9 +106,11 @@ export function seed(db) {
       for (const [n, userId] of [[4, 4], [5, 5], [6, 6], ...Array.from({ length: guestOrders }, (_, k) => [k + 10, 7])]) {
         if (userId < 7 && (d + userId) % 3) continue;
         const picks = [items[(d * n) % items.length], items[(d + n * 7) % items.length]];
-        const total = picks.reduce((sum, i) => sum + i.price_cents, 0);
+        const lines = picks.map((i) => ({ ...i, qty: 1 }));
+        const reward = userId < 7 && d % 4 === 0 ? rewards.find((r) => lines.some((l) => l.category === r.category_allowed)) : null;
+        const price = priceOrder(lines, reward ?? null, TIER_PCT[userId] ?? 0);
         const at = daysAgo(d, 8 + (n % 12));
-        const { lastInsertRowid } = o.run(userId, at, total, total, at);
+        const { lastInsertRowid } = o.run(userId, at, price.subtotal, price.discount, price.total, reward?.id ?? null, at);
         for (const i of picks) oi.run(lastInsertRowid, i.id, 1, i.price_cents);
       }
       if (d % 7 !== 0) s.run(2 + (d % 2), daysAgo(d, 9), daysAgo(d, 17));
