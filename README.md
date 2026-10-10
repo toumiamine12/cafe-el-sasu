@@ -1,155 +1,162 @@
-# Café el Sasu — Online-Vorbestellung
+# Café el Sasu — Online Preorder & Café Management
 
-A full-stack preorder app for a café in Krefeld. Customers log in with a member ID, order coffee and cakes for pickup, collect points and unlock rewards. Staff run the order queue and clock their hours, and the owner sees the finances.
+**Order ahead, skip the line.** A full-stack web app for a real café in Krefeld, Germany. Guests preorder coffee and cake for pickup and collect loyalty points. The team runs a live kitchen display and tracks their hours. The owner gets a finance dashboard with revenue, labor cost and VAT.
 
-Built with **Node.js, Express and SQLite** (`node:sqlite`). The frontend is plain HTML/CSS/JS on top of the original Bootstrap 3 site, with no build step. The only runtime dependency is `express`.
+![Node.js 22](https://img.shields.io/badge/Node.js-22-339933?logo=nodedotjs&logoColor=white)
+![Express](https://img.shields.io/badge/Express-4-000000?logo=express&logoColor=white)
+![SQLite](https://img.shields.io/badge/SQLite-node%3Asqlite-003B57?logo=sqlite&logoColor=white)
+![Vanilla JS](https://img.shields.io/badge/Frontend-Vanilla%20JS-F7DF1E?logo=javascript&logoColor=black)
+![Tests](https://img.shields.io/badge/tests-122%20passing-2f6b26)
+![Dependencies](https://img.shields.io/badge/runtime%20deps-2-informational)
 
-| Speisekarte | Item details |
+![Startseite](docs/screenshots/home.png)
+
+> The interface is in German (formal *Sie*), like the café itself. This README is in English.
+
+---
+
+## Highlights
+
+- **Three apps in one.** A single-page app serves guests, staff and the owner. One login decides where each person lands, and every route is protected on the server.
+- **Real business rules.** Pickup slots respect opening hours (Europe/Berlin, including daylight-saving changes), kitchen capacity per 15-minute window, sold-out items and rush mode.
+- **Money done right.** All amounts are integer cents. Prices are recalculated on the server, discounts are split across lines with a largest-remainder method, and the dashboard's daily totals add up exactly to its KPIs.
+- **Security built in.** Passwords are hashed with scrypt, sessions use HttpOnly cookies, login attempts are throttled, and there is a strict Content-Security-Policy, CSRF protection and CSV-injection guards.
+- **Small footprint.** There is no framework and no build step. The app has two runtime dependencies (`express`, `qrcode`) and uses Node's built-in SQLite.
+
+## Screenshots
+
+| Speisekarte | Drink options with live price |
 |---|---|
-| ![Menu](docs/screenshots/menu.png) | ![Item](docs/screenshots/item.png) |
-| **Member account** | **Admin finance** |
-| ![Account](docs/screenshots/account.png) | ![Finance](docs/screenshots/admin-finance.png) |
+| ![Menu](docs/screenshots/menu.png) | ![Item dialog](docs/screenshots/item.png) |
+| **Member account with live order status** | **Kitchen display for staff** |
+| ![Account](docs/screenshots/account.png) | ![Kitchen display](docs/screenshots/kitchen.png) |
+
+<details>
+<summary><b>Finanzen dashboard (owner)</b> and mobile view</summary>
+
+| Finanzen | Mobile |
+|---|---|
+| ![Finance dashboard](docs/screenshots/admin-finance.png) | ![Phone](docs/screenshots/phone.png) |
+
+</details>
 
 ## Features
 
-**One app, one login**
-- Single-page app: everything runs from `index.html` with hash routes — `#/`, `#/speisekarte`, `#/warenkorb`, `#/login`, `#/konto`, `#/admin`, `#/bildnachweise`. No page reloads; back button, refresh and bookmarks work.
-- One login form for customers, staff and admin. The account decides where you land: customers → `#/konto`, staff/admin → `#/admin`. Protected routes send you to login and back.
+### For guests
+- **Preordering.** The menu has 49 items with photos, search, allergen and vegan filters, and options such as milk, syrup, extra shot and ice level. Prices update live as options change.
+- **Pickup slots.** Guests pick a valid 15-minute window. Full windows show as *Ausgebucht*, and the capacity check runs inside the same database transaction as the order.
+- **Live order status.** A progress bar runs from *Eingegangen* to *In Zubereitung* to *Abholbereit*. An "Ihr Kaffee ist ready!" banner appears on every page.
+- **Loyalty program.** Guests earn 1 point per euro and move through the tiers Bronze, Silver (5 % off) and Gold (10 % off). Rewards include a free pastry, coffee or cake, plus a birthday-week coffee. A single *Prämien-Strecke* track shows the progress.
+- **Member card.** Each card has a QR code to scan at the counter and can be saved as an image for the phone ("Karte aufs Handy"). The site also installs as a home-screen web app.
+- **Speed dial.** *Das Übliche* reorders a guest's usual drink in one tap. Guests can also save customised favourites and set a preferred milk.
+- **Bean subscription.** Guests reserve whole beans every 1, 2 or 4 weeks, and can pause, skip or cancel.
+- **Coffee gifts.** A guest can gift a coffee, paid with points or at the counter. The gift is shared via WhatsApp or e-mail as a link with a QR code.
 
-**Startseite**
-- Live status: "Jetzt geöffnet · bis 22:00 Uhr" or when it opens next, plus the earliest pickup time
-- "Beliebt diese Woche": the real top 4 best-sellers of the last 7 days, addable to the cart
-- How it works in 3 steps, loyalty tiers (highlights your own tier when logged in), "repeat last order" button
-- Über uns with photo gallery, map and opening hours with today highlighted
+### For staff
+- **Kitchen display.** It has a high-contrast ticket grid with big pickup times and option badges. One tap moves a ticket to the next status.
+- **Rush controls.** Staff can pause online orders, add 15 minutes of lead time, or mark items as sold out.
+- **Member lookup.** Staff scan the guest's QR code with the camera (BarcodeDetector) or a USB scanner, or type the member number.
+- **Meine Zeit.** Staff clock in and out with breaks, get legal-break reminders, and see their net hours, earnings, a 14-day chart and their full history.
+- **Dienstplan.** A weekly rota shows who is on shift today.
 
-**Customers**
-- Register and get a member ID (`SASU-1007`, …); log in with the member ID or email
-- Menu of 49 items laid out like a printed café menu: sticky category bar, search, item popup with quantity, allergen/vegan tags, floating cart bar
-- Preorder for pickup: only valid 15-minute slots inside opening hours (every day 09:00–20:00, Europe/Berlin), at least 15 min ahead
-- Pay at pickup, cancel while the order is still "Eingegangen"
-- Live order status on the account page (refreshes every 10 s, toast when ready)
-- Account page: welcome banner, member card with QR code (tap to enlarge at the counter), stats (orders, total spent, favorite), full purchase history with receipts, reorder in one click
-- Edit name, email and birthday; change password (signs out other devices)
+### For the owner
+- **Finanzen.** The dashboard covers today, 7 days, 30 days or a custom range.
+  - KPI cards show gross revenue, result after labor, labor cost ratio, order count and average ticket, and discounts.
+  - SVG charts with tooltips and a table view show revenue vs. labor, peak hours, a category donut and the top 10 items.
+  - Further panels cover slowest items, popular extras, online vs. walk-in orders, a VAT estimate (7 % / 19 %) and rules-based business tips.
+  - Reports export as CSV for Excel, or as a print-ready PDF layout.
+- **Menu editor.** The owner can edit prices, descriptions, tags and photos, and hide or delete items. Old receipts keep their original prices.
+- **Team management.** The owner creates staff accounts with temporary passwords, sets hourly wages, deactivates accounts and plans shifts.
+- **Payroll export.** A monthly CSV lists each person's net hours and wages.
 
-**Speed dial**
-- "Das Übliche": the guest's most-ordered exact drink (with options) as a one-tap hero button; checkout preselects their usual pickup time
-- Favorites: star any customised drink in the item popup; one tap from the account puts it in the cart
-- Preferences: preferred milk preselected in every drink, optional vegan-only Speisekarte
+## Architecture
 
-**Live order pulse**
-- Progress bar Eingegangen → In Zubereitung → Abholbereit with a countdown to pickup
-- "Ihr Kaffee ist ready!" banner on every page the moment an order is ready
-
-**Bean subscription & gifts**
-- Bohnen-Abo: whole beans (Espresso, Filter, Decaf; 250 g / 1 kg) reserved every 1, 2 or 4 weeks for pickup; pause, skip or cancel; staff see what's due
-- Kaffee verschenken: a coffee-of-choice voucher paid with 100 points or 5 € at the counter (staff activate it); shared as link + QR via WhatsApp / e-mail; the friend redeems it at checkout
-
-**Loyalty**
-- 1 point per €1, credited when the order is picked up
-- Tiers by lifetime points: **Bronze** → **Silver** (200, 5 % off) → **Gold** (500, 10 % off)
-- Rewards: free pastry (50), free coffee (100), free cake (250), birthday coffee for every member during their birthday week (with a banner)
-- Prämien-Strecke: one progress track with every reward as a milestone and a "Sie: 140" marker, the tier badge and its automatic discount in the same card
-- "Karte aufs Handy": the member card with QR as a phone-sized image, and the site can be added to the home screen (web app manifest). Real Apple/Google Wallet passes need paid developer accounts and aren't included
-- Redeeming never drops your tier; cancelling refunds the reward points
-
-**Item options**
-- Milk (Vollmilch, Hafer +0,50 €, Mandel +0,50 €, Laktosefrei +0,30 €), syrup (+0,40 €), extra shot (+0,80 €), ice level
-- Picked in the item popup with a live price; shown as badges in the cart, receipts and the kitchen display
-- Prices and options are validated on the server and copied onto each order line (later price changes don't touch old receipts); a reward makes the base price free, options are still charged
-
-**Pickup capacity**
-- At most 5 orders per 15-minute window (owner can change it); full windows show as "Ausgebucht" in checkout
-- Checked inside the same write transaction as the order, so two guests can't take the last place
-
-**Staff & admin** (`#/admin`)
-- Kitchen display: high-contrast ticket grid with big pickup times, customer names and bright option badges (HAFERMILCH, EXTRA SHOT); one tap moves a ticket Neu → In Arbeit → Abholbereit → Abgeholt
-- Rush controls for staff: pause online orders, or push the earliest pickup from 15 to 30 minutes
-- Member lookup: scan the member-card QR (camera via the browser's BarcodeDetector, or a USB scanner) or type the SASU number to see that guest's open orders
-- "Ausverkauft" switches: sold-out items stay on the Speisekarte, greyed out, and can't be ordered
-- Clock in/out, hours per person for the last 7 and 30 days
-- Admin only: **Finanzen** dashboard for Heute / 7 / 30 days or any custom range (up to 92 days)
-  - KPI cards: Brutto-Umsatz, Netto-Gewinn (revenue − wages), Personalkosten and their share of revenue, orders and average order value, discounts and redeemed rewards
-  - Charts (plain SVG, hover tooltips, table view): revenue vs. wage cost over time, Peak-Stunden, revenue by category (donut), top 10 items; slowest items, most popular extras, online vs. counter orders
-  - VAT estimate (7 % food and beans, 19 % drinks), rules-based tips (staffing for the rush, wage share, plant milk stock, slow sellers)
-  - Bericht exportieren: CSV for Excel with totals, VAT, wages, result and one row per day; Drucken / PDF via a print layout
-  - Money is integer cents end to end; wage cost = net shift minutes × hourly wage (`GET /api/admin/analytics`, `GET /api/admin/report.csv`)
-  - Bean-subscription revenue counts from each pickup marked "übergeben". Databases created before this version never recorded pickups, so their earlier bean sales can't be reconstructed (skips moved the same date) and are missing from history
-- Admin only: full menu editor (name, description, category, price, allergen tags, photo path or https URL), hide/show, delete (never-ordered items are removed, ordered ones hidden)
-- Admin only: staff management — create staff with a temporary password (changed at first login), set hourly wages, deactivate accounts (signs them out, ends a running shift)
-- Admin only: shift table with clock-in/out, hours and wage cost per shift and per employee
-- Admin only: payroll export — one CSV per month (Name; Mitgliedsnr; Datum; Beginn; Ende; Pause; Netto-Stunden; Stundenlohn; Lohn) with totals per employee, ready for Excel / the payroll office
-- Dienstplan (rota): week grid of planned shifts; the owner adds and removes shifts (no overlaps, max 12 h), staff see it read-only, and the kitchen display shows who's on today
-
-**Meine Zeit (every staff member)**
-- Live shift card: clocked in since…, worked time, Pause starten/beenden (breaks are unpaid), reminder when the legal break (30 min after 6 h, 45 min after 9 h) is still open
-- This week's and month's net hours, earnings at your wage, orders you handled
-- 14-day hours chart, your next planned shifts, and the full history with breaks, net hours and pay
-
-**Security**
-- scrypt-hashed passwords (min. 8 characters), HttpOnly SameSite session cookies (Secure in production)
-- Login throttling: 5 wrong passwords per account / 20 per IP → 15-minute pause
-- Content-Security-Policy (only own scripts), no framing, `nosniff`, strict referrer policy, no `X-Powered-By`
-- Cross-site request protection: writes must be JSON from the site's own origin
-- Server-side role checks: admin routes for staff/admin only; ordering, rewards and member card for customers only
-- Prices always from the database, parameterised SQL, all user text escaped before rendering
-- No staff/admin passwords in the code (env vars or generated on first start)
-
-## Run locally
-
-Needs Node.js 22.13 or newer.
-
-```bash
-npm install
-npm start          # http://localhost:3000
-npm test           # 122 API + rules tests
+```
+Browser (vanilla ES modules, hash router)          Server (Node 22 + Express)
+┌──────────────────────────────────────┐   JSON   ┌───────────────────────────────┐
+│ index.html  – one <template> per view│ ───────► │ app.js   routes, auth, roles  │
+│ router.js   – guards, per-mount life │          │ rules.js pure business rules  │
+│ views/*.js  – home, menu, cart,      │ ◄─────── │ db.js    schema + migrations  │
+│               account, admin, finance│          │ seed.js  realistic demo data  │
+└──────────────────────────────────────┘          └──────────────┬────────────────┘
+                                                                 │ node:sqlite
+                                                           data/cafe.db
 ```
 
-The database (`data/cafe.db`) is created and filled with demo data on first start. Delete `data/` to reset.
+**Design decisions**
+- **Pure rules module.** Pricing, tiers, opening hours, pickup validation, break rules, VAT and insights live in `server/rules.js` as pure functions. Tests cover them directly, and the routes stay thin.
+- **Server-side trust.** The client never sends prices, only item IDs and options. The server re-validates options, copies prices onto each order line, and enforces every role check.
+- **Transactions where it matters.** The capacity check and order insert run in one `BEGIN IMMEDIATE` transaction, so two guests can't take the last slot.
+- **Time zones on purpose.** Every slot, report bucket and shift is calculated in `Europe/Berlin`, so the 23- and 25-hour days at the daylight-saving switches are handled correctly.
+- **Schema migrations.** `db.js` adds new columns and indexes to existing databases at startup, and backfills data such as usernames.
 
-### Logins
+## Security
+
+- Passwords are hashed with scrypt (at least 8 characters). Staff and admin passwords come from environment variables or are generated randomly, never hard-coded.
+- Session cookies are HttpOnly and SameSite=Lax, and Secure in production. A password change signs out other devices.
+- After 5 failed logins per account or 20 per IP, login pauses for 15 minutes.
+- Every write request needs a JSON content type and a same-origin request (CSRF protection).
+- The strict Content-Security-Policy allows only the site's own scripts. Responses also send `X-Frame-Options: DENY`, `nosniff` and a strict referrer policy.
+- All SQL is parameterised and all user text is escaped before rendering. CSV exports guard against formula injection.
+
+## Getting started
+
+Requires **Node.js 22.13+**.
+
+```bash
+git clone https://github.com/toumiamine12/cafe-el-sasu.git
+cd cafe-el-sasu
+npm install
+ADMIN_PASSWORD=admin123 STAFF_PASSWORD=staff123 npm start   # http://localhost:3000
+npm test                                                     # 122 API, rules and DB tests
+```
+
+On first start, the app creates `data/cafe.db` and fills it with demo data: a month of order history, today's service with orders in every status, 7 staff members with shifts and a rota, and 5 bean subscriptions. Delete `data/` to reset it.
+
+### Demo logins
 
 | Role | Login | Password |
 |---|---|---|
-| Demo customer | `SASU-1004`, `mehmet@example.com` or the username | `demo123` |
-| Admin (Leyla Aksoy) | `SASU-1000` or the username | `ADMIN_PASSWORD` env var |
-| Staff (7) | `SASU-1001`, `SASU-1002`, `SASU-1007` … `SASU-1011` or the username | `STAFF_PASSWORD` env var |
+| Guest | `SASU-1004` or `mehmet@example.com` | `demo123` |
+| Owner (Leyla Aksoy) | `SASU-1000` | value of `ADMIN_PASSWORD` |
+| Staff | `SASU-1001`, `SASU-1002`, `SASU-1007` … `SASU-1011` | value of `STAFF_PASSWORD` |
 
-Every account also gets a username `vorname.nachname` + 4 random digits (e.g. `leyla.aksoy4821`), shown in the profile and the staff list; the staff/admin usernames are printed in the terminal on first start.
+Every account also has a username in the form `vorname.nachname` plus 4 digits, which works for login too. The staff and admin usernames are printed in the terminal on first start. If no passwords are set, random ones are generated and printed once.
 
-The demo data includes a month of history (~1.000 € a day, counter and online orders), today's service with 5 orders each Eingegangen / In Zubereitung / Abholbereit / Abgeholt, and 5 bean subscriptions.
+## Deployment
 
-Staff and admin passwords are never stored in the code. Set them as environment variables; if they're missing on first start, the server generates random ones and prints them once in the terminal.
+The repo includes a [Render](https://render.com) blueprint (`render.yaml`):
 
-## Deploy (free, Render)
+1. On Render, choose **New → Blueprint** and select this repository.
+2. Render generates `ADMIN_PASSWORD` and `STAFF_PASSWORD`. You can find them under *Environment*.
 
-1. Push this repo to GitHub
-2. On [render.com](https://render.com): **New → Blueprint** → pick the repo (it reads `render.yaml`)
-3. Open the `*.onrender.com` URL
-
-The free plan has no persistent disk, so the demo data resets on every restart. That's fine for a demo; a real deployment needs a persistent disk or a hosted database.
+The free plan has no persistent disk, so the demo data resets on each restart. A production setup needs a persistent disk or a hosted database.
 
 ## Project structure
 
 ```
-server.js            entry point
-server/app.js        Express routes (auth, orders, admin)
-server/rules.js      pure business rules: tiers, opening hours, pricing, points
-server/db.js         schema, password hashing
-server/seed.js       demo menu, users, a month of order history
-public/index.html    the whole site: navbar, footer, one <template> per view
-public/router.js     hash router + route guards
-public/app.js        shared helpers, session, navbar
-public/views/        one module per view (home, menu, cart, login, account, admin, credits)
-test/                node --test suites
+server.js              entry point
+server/app.js          Express routes: auth, orders, loyalty, staff, analytics
+server/rules.js        pure business rules (pricing, hours, tiers, VAT, insights)
+server/db.js           schema, migrations, password hashing, transactions
+server/seed.js         demo menu, users, history, today's service
+public/index.html      app shell + one <template> per view
+public/router.js       hash router with route guards
+public/app.js          shared helpers: API client, session, cart, navbar
+public/views/          one module per view (menu, cart, account, admin, finance, …)
+public/shop.css        all styles
+test/                  node:test suites (rules, API, database)
 ```
 
-## Photo credits
+## Roadmap
 
-The photos of 30 menu items come from Wikimedia Commons and Flickr under Creative Commons licenses; each one is credited on `/credits.html`. All other photos belong to Café El Sasu.
+- Online payment (Stripe) and e-mail order confirmations
+- Push notifications when an order is ready
+- Apple / Google Wallet passes for the member card
+- PostgreSQL for multi-instance hosting
 
-## Next ideas
+## Credits
 
-- QR code on the member card to scan at the counter
-- Invite a friend: both get 50 points
-- Limit orders per pickup slot so the kitchen isn't flooded
-- Online payment (Stripe) and email confirmations
+The menu photos come from Wikimedia Commons and Flickr under Creative Commons licenses, and each is credited on the in-app *Bildnachweise* page. All other photos and the logo belong to Café el Sasu.
+
+Built by [toumiamine12](https://github.com/toumiamine12).
