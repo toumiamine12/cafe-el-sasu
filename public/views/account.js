@@ -13,7 +13,7 @@ export default {
   title: 'Mein Konto',
   hero: true,
   auth: 'user',
-  async mount(root, params) {
+  async mount(root, params, alive) {
     const $ = (id) => root.querySelector('#' + id);
     let user;
     let orders = [];
@@ -166,9 +166,20 @@ export default {
 
     // --- load + live status -------------------------------------------------------------
     async function refresh() {
-      const [me, rewards, list] = await Promise.all([api('/api/me'), api('/api/rewards'), api('/api/orders')]);
-      if (!root.isConnected) return; // left the page meanwhile
-      if (!me) return go('#/login?next=%23%2Fkonto');
+      let me, rewards, list;
+      try {
+        [me, rewards, list] = await Promise.all([api('/api/me'), api('/api/rewards'), api('/api/orders')]);
+      } catch (err) {
+        if (!alive()) return;
+        if (err.status !== 401) return toast(err.message);
+        me = null; // session expired while on this page
+      }
+      if (!alive()) return; // left the page meanwhile
+      if (!me) {
+        await session.refresh();
+        return go('#/login?next=%23%2Fkonto');
+      }
+      session.user = me; // keep the shared copy in step with the points shown here
       user = me;
       orders = list;
       for (const o of orders) {
@@ -184,7 +195,7 @@ export default {
 
     showTab('overview');
     await refresh();
-    if (!root.isConnected) return;
+    if (!alive()) return;
     fillProfile();
     if (params.get('placed')) toast(`Danke! Bestellung #${params.get('placed')} ist eingegangen.`);
     if (params.get('welcome')) toast(`Willkommen! Deine Mitgliedsnummer: ${params.get('welcome')}`);

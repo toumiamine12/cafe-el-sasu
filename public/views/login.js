@@ -11,13 +11,13 @@ function destination(user, next) {
 export default {
   title: 'Login',
   hero: false,
-  async mount(root, params) {
+  async mount(root, params, alive) {
     const $ = (id) => root.querySelector('#' + id);
     const next = params.get('next');
     let registering = false;
 
     const user = await session.get();
-    if (!root.isConnected) return;
+    if (!alive()) return;
     if (user) {
       $('login-panel').hidden = true;
       $('logged-in').hidden = false;

@@ -28,16 +28,20 @@ export function go(hash) {
 const root = document.getElementById('view');
 let current = null;
 let seq = 0;
+let mountId = 0; // bumps on every navigation; a view's alive() turns false when it is left
 
 async function render() {
   const token = ++seq;
   const { path, view, params } = routeFor(location.hash);
   if (!view) return go('#/');
-  const user = await session.get();
+  // Protected views re-check the login with the server (the cookie may have expired).
+  const user = view.auth ? await session.refresh() : await session.get();
   if (token !== seq) return; // a newer navigation started meanwhile
   if (view.auth && !user) return go(`#/login?next=${encodeURIComponent('#/' + path)}`);
   if (!allowed(view, user)) return go(roleHome(user));
 
+  const id = ++mountId;
+  const alive = () => id === mountId;
   current?.unmount?.();
   current = view;
   root.replaceChildren(document.getElementById(`tpl-${path || 'home'}`).content.cloneNode(true));
@@ -47,7 +51,7 @@ async function render() {
   setActiveLink(`#/${path}`);
   closeMobileNav();
   scrollTo(0, 0);
-  await view.mount(root, params);
+  await view.mount(root, params, alive);
 }
 
 addEventListener('hashchange', render);

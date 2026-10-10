@@ -7,7 +7,7 @@ const fmtSlot = new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', we
 export default {
   title: 'Warenkorb',
   hero: false,
-  async mount(root) {
+  async mount(root, params, alive) {
     const $ = (id) => root.querySelector('#' + id);
     let menu = [];
 
@@ -60,16 +60,17 @@ export default {
     });
 
     menu = await getMenu();
-    if (!root.isConnected) return;
+    if (!alive()) return;
     cart.set(cart.get().filter((l) => menu.some((m) => m.id === l.id)));
     renderCart();
-    const user = await session.get();
+    const user = await session.refresh(); // fresh points for the reward list
+    if (!alive()) return;
     if (!user) {
       $('order-form').innerHTML = '<p>Bitte <a href="#/login?next=%23%2Fwarenkorb">einloggen oder registrieren</a>, um vorzubestellen und Punkte zu sammeln.</p>';
       return;
     }
     const [slots, rewards] = await Promise.all([api('/api/pickup-slots'), api('/api/rewards')]);
-    if (!root.isConnected) return;
+    if (!alive()) return;
     $('pickup').innerHTML = slots.map((s) => `<option value="${s}">${fmtSlot.format(new Date(s))} Uhr</option>`).join('')
       || '<option value="">Gerade keine Abholzeit verfügbar</option>';
     $('reward').innerHTML += rewards.filter((r) => r.cost_points <= user.points)

@@ -12,7 +12,7 @@ export default {
   title: 'Dashboard',
   hero: false,
   auth: 'staff',
-  async mount(root) {
+  async mount(root, params, alive) {
     const $ = (id) => root.querySelector('#' + id);
     let user;
     let range = 'week';
@@ -32,8 +32,8 @@ export default {
     // --- orders (poll every 10 s while visible) -------------------------------------
     async function loadOrders() {
       clearTimeout(pollTimer);
-      const orders = await api('/api/admin/orders').catch((err) => root.isConnected && fail($('open-orders'))(err));
-      if (!orders || !root.isConnected) return; // nothing to draw, or the view was left
+      const orders = await api('/api/admin/orders').catch((err) => alive() && fail($('open-orders'))(err));
+      if (!orders || !alive()) return; // nothing to draw, or the view was left
       $('open-orders').innerHTML = orders.length ? orders.map((o) => `
         <div class="row-line" style="flex-wrap:wrap">
           <div class="grow">
@@ -62,8 +62,8 @@ export default {
 
     // --- staff hours --------------------------------------------------------------
     async function loadStaff() {
-      const rows = await api('/api/admin/shifts').catch(fail($('staff-table')));
-      if (!rows || !root.isConnected) return;
+      const rows = await api('/api/admin/shifts').catch((err) => alive() && fail($('staff-table'))(err));
+      if (!rows || !alive()) return;
       const mine = rows.find((r) => r.id === user.id);
       $('clock').textContent = mine?.open ? 'Ausstempeln' : 'Einstempeln';
       const showWage = user.role === 'admin';
@@ -90,8 +90,8 @@ export default {
 
     // --- finance ------------------------------------------------------------------
     async function loadFinance() {
-      const f = await api(`/api/admin/finance?range=${range}`).catch(fail($('stats')));
-      if (!f || !root.isConnected) return;
+      const f = await api(`/api/admin/finance?range=${range}`).catch((err) => alive() && fail($('stats'))(err));
+      if (!f || !alive()) return;
       const stat = (label, value, cls = '') => `<div class="stat"><div class="label">${label}</div><div class="value ${cls}">${value}</div></div>`;
       $('stats').innerHTML = stat('Umsatz', euro(f.revenue)) + stat('Personalkosten', euro(f.wages))
         + stat('Ergebnis', euro(f.profit), f.profit < 0 ? 'neg' : '') + stat('Bestellungen', f.orders)
@@ -112,8 +112,8 @@ export default {
 
     // --- menu ---------------------------------------------------------------------
     async function loadMenu() {
-      const items = await api('/api/admin/menu').catch(fail($('menu-table')));
-      if (!items || !root.isConnected) return;
+      const items = await api('/api/admin/menu').catch((err) => alive() && fail($('menu-table'))(err));
+      if (!items || !alive()) return;
       $('menu-table').innerHTML = `
         <thead><tr><th>Artikel</th><th>Kategorie</th><th>Preis (€)</th><th>Aktiv</th></tr></thead>
         <tbody>${items.map((i) => `<tr>

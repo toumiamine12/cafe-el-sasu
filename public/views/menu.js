@@ -16,7 +16,7 @@ let spy = null;
 export default {
   title: 'Speisekarte',
   hero: true,
-  async mount(root) {
+  async mount(root, params, alive) {
     const $ = (id) => root.querySelector('#' + id);
     let items = [];
     let current = null;
@@ -117,10 +117,10 @@ export default {
     try {
       items = await getMenu();
     } catch {
-      if (root.isConnected) $('menu-root').innerHTML = '<p class="menu-empty panel error">Die Speisekarte konnte nicht geladen werden. Bitte Seite neu laden.</p>';
+      if (alive()) $('menu-root').innerHTML = '<p class="menu-empty panel error">Die Speisekarte konnte nicht geladen werden. Bitte Seite neu laden.</p>';
       return;
     }
-    if (!root.isConnected || !$('menu-root')) return;
+    if (!alive()) return;
     render();
     updateCartBar();
   },

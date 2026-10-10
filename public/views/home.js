@@ -9,9 +9,8 @@ const at = (d) => `${berlinDate(d) === berlinDate(new Date()) ? 'heute' : fmtDay
 export default {
   title: '',
   hero: true,
-  async mount(root) {
+  async mount(root, params, alive) {
     const $ = (id) => root.querySelector('#' + id);
-    const alive = () => root.isConnected && $('popular'); // view still on screen?
 
     api('/api/status').then((s) => {
       if (!alive()) return;
@@ -37,7 +36,7 @@ export default {
         </article>`).join('');
     }).catch(() => { if (alive()) $('popular').innerHTML = '<p class="muted">Gerade nicht verfügbar.</p>'; });
 
-    const user = await session.get();
+    const user = await session.refresh(); // fresh points for the loyalty block
     if (!user || !alive()) return;
     $('loyalty-sub').textContent = `Du bist ${user.tier.name}-Mitglied mit ${user.points} Punkten.`;
     $('loyalty-cta').innerHTML = user.tier.next
