@@ -12,8 +12,14 @@ const ROUTES = { '': home, speisekarte: menu, warenkorb: cartView, login, konto:
 
 export const roleHome = (user) => (user.role === 'customer' ? '#/konto' : '#/admin');
 
-// auth: undefined = public, 'user' = any login, 'staff' = staff or admin.
-export const allowed = (view, user) => !view.auth || (!!user && (view.auth === 'user' || user.role !== 'customer'));
+// auth: undefined = public, 'customer' = logged-in guest, 'staff' = staff or admin.
+// guestsOnly: public page that staff/admin don't use (the cart) — they go to the dashboard instead.
+const isStaff = (user) => !!user && user.role !== 'customer';
+export const allowed = (view, user) => {
+  if (view.auth === 'customer') return !!user && !isStaff(user);
+  if (view.auth === 'staff') return isStaff(user);
+  return !(view.guestsOnly && isStaff(user));
+};
 
 export function routeFor(hash) {
   const [path = '', query = ''] = hash.replace(/^#\/?/, '').split('?');

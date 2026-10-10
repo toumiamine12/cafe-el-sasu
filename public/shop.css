@@ -393,6 +393,30 @@ body { font-family: var(--text); color: var(--espresso); min-height: 100vh; disp
 .member-card .pts { font-size: 15px; }
 .member-card .pts strong { font-size: 30px; }
 
+.member-card .qr {
+    position: absolute;
+    right: 20px;
+    bottom: 20px;
+    padding: 5px;
+    border: none;
+    border-radius: 8px;
+    background: #fff;
+    line-height: 0;
+    cursor: zoom-in;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+.member-card .qr img { width: 64px; height: 64px; }
+.member-card > div:last-child { padding-right: 92px; } /* room for the QR */
+.qr-dialog { border: none; border-radius: 12px; padding: 28px; text-align: center; background: var(--paper); color: var(--espresso); max-width: calc(100vw - 32px); }
+.qr-dialog::backdrop { background: rgba(59, 38, 21, 0.6); }
+.qr-dialog h2 { font-family: var(--display); font-style: italic; font-weight: 600; font-size: 30px; margin: 0 0 16px; }
+.qr-dialog img { width: 240px; height: 240px; max-width: 70vw; height: auto; background: #fff; padding: 8px; border-radius: 8px; }
+.qr-dialog .mid { font-size: 20px; letter-spacing: 3px; font-weight: 700; margin: 12px 0 4px; }
+.qr-dialog .btn-cafe { margin-top: 12px; }
+
+/* Staff/admin don't order. */
+.is-staff #loyalty-cta, .is-staff .add-btn, .is-staff .cart-bar, .is-staff #dlg-add, .is-staff .item-dialog .qty, .is-staff [data-add] { display: none !important; }
+
 .progress { background: #f1e4d3; height: 8px; border-radius: 4px; overflow: hidden; }
 .progress div { background: var(--caramel); height: 100%; }
 .progress.on-dark { background: rgba(255, 255, 255, 0.25); }
@@ -622,7 +646,7 @@ body { font-family: var(--text); color: var(--espresso); min-height: 100vh; disp
     .brand span { font-size: 22px; }
     .brand img { width: 38px; height: 38px; }
     .nav-toggle { display: block; order: 3; }
-    .nav-pill { display: none; }
+    .nav-pill, .nav-user { display: none; }
     .nav-links .mobile-only { display: block; }
     .nav-links button.mobile-only { background: none; border: none; border-bottom: 1px solid var(--line); text-align: left; padding: 14px 0; font-size: 18px; font-weight: 600; color: var(--danger); width: 100%; }
     .nav-links {

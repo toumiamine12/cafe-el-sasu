@@ -1,4 +1,5 @@
 // Demo data so a fresh install has a full menu, accounts and some history.
+import { randomBytes } from 'node:crypto';
 import { hashPassword, tx } from './db.js';
 import { priceOrder } from './rules.js';
 
@@ -64,9 +65,9 @@ const REWARDS = [
 
 // [member_id, name, email, password, role, wage, lifetime_points, points, birthday]
 const USERS = [
-  ['SASU-1000', 'Leyla Aksoy', 'admin@cafe-elsasu.de', 'admin123', 'admin', 0, 0, 0, null],
-  ['SASU-1001', 'Lena Becker', 'lena@cafe-elsasu.de', 'staff123', 'staff', 1400, 0, 0, null],
-  ['SASU-1002', 'Yusuf Demir', 'yusuf@cafe-elsasu.de', 'staff123', 'staff', 1400, 0, 0, null],
+  ['SASU-1000', 'Leyla Aksoy', 'admin@cafe-elsasu.de', 'ADMIN', 'admin', 0, 0, 0, null],
+  ['SASU-1001', 'Lena Becker', 'lena@cafe-elsasu.de', 'STAFF', 'staff', 1400, 0, 0, null],
+  ['SASU-1002', 'Yusuf Demir', 'yusuf@cafe-elsasu.de', 'STAFF', 'staff', 1400, 0, 0, null],
   ['SASU-1003', 'Anna Schmidt', 'anna@example.com', 'demo123', 'customer', 0, 80, 80, '1998-03-14'],
   ['SASU-1004', 'Mehmet Kaya', 'mehmet@example.com', 'demo123', 'customer', 0, 260, 140, '1990-11-02'],
   ['SASU-1005', 'Sophie Wagner', 'sophie@example.com', 'demo123', 'customer', 0, 620, 310, '1995-06-21'],
@@ -80,7 +81,17 @@ const daysAgo = (d, hour) => {
   return t.toISOString();
 };
 
+// Staff/admin passwords are never in the code: take them from the environment,
+// or generate random ones and print them once on first start.
+function secret(envName, label, ids) {
+  if (process.env[envName]) return process.env[envName];
+  const pw = randomBytes(9).toString('base64url');
+  console.log(`${label}-Passwort (${ids}): ${pw}   – setze ${envName}, um es festzulegen`);
+  return pw;
+}
+
 export function seed(db) {
+  const pw = { ADMIN: secret('ADMIN_PASSWORD', 'Admin', 'SASU-1000'), STAFF: secret('STAFF_PASSWORD', 'Personal', 'SASU-1001, SASU-1002') };
   tx(db, () => {
     const m = db.prepare('INSERT INTO menu_items (name, description, category, price_cents, photo, tags) VALUES (?, ?, ?, ?, ?, ?)');
     for (const [n, d, c, p, photo, tags] of MENU) m.run(n, d, c, p, `photos/${photo}`, tags);
@@ -90,7 +101,7 @@ export function seed(db) {
 
     const u = db.prepare(`INSERT INTO users (member_id, name, email, password_hash, role, hourly_wage, lifetime_points, points, birthday)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-    for (const [mid, n, e, pw, role, wage, life, pts, bd] of USERS) u.run(mid, n, e, pw ? hashPassword(pw) : 'x:x', role, wage, life, pts, bd);
+    for (const [mid, n, e, p, role, wage, life, pts, bd] of USERS) u.run(mid, n, e, p ? hashPassword(pw[p] ?? p) : 'x:x', role, wage, life, pts, bd);
 
     // A month of history: orders from the 3 demo customers, shifts for the 2 staff.
     // Demo customers get their tier discount, and every 4th day one of their orders redeems a matching reward.

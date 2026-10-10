@@ -28,7 +28,7 @@ Built with **Node.js, Express and SQLite** (`node:sqlite`). The frontend is plai
 - Preorder for pickup: only valid 15-minute slots inside opening hours, at least 15 min ahead
 - Pay at pickup, cancel while the order is still "Eingegangen"
 - Live order status on the account page (refreshes every 10 s, toast when ready)
-- Account page: welcome banner, member card, stats (orders, total spent, favorite), full purchase history with receipts, reorder in one click
+- Account page: welcome banner, member card with QR code (tap to enlarge at the counter), stats (orders, total spent, favorite), full purchase history with receipts, reorder in one click
 - Edit name, email and birthday; change password (signs out other devices)
 
 **Loyalty**
@@ -43,7 +43,14 @@ Built with **Node.js, Express and SQLite** (`node:sqlite`). The frontend is plai
 - Admin only: revenue, wage cost, profit, order count, average order value, top 5 items (today / 7 / 30 days)
 - Admin only: edit prices, hide items, add new items
 
-**Security basics**: scrypt-hashed passwords, HttpOnly session cookies, prices always taken from the database, server-side role checks on every admin route, and all user text escaped before rendering.
+**Security**
+- scrypt-hashed passwords (min. 8 characters), HttpOnly SameSite session cookies (Secure in production)
+- Login throttling: 5 wrong passwords per account / 20 per IP → 15-minute pause
+- Content-Security-Policy (only own scripts), no framing, `nosniff`, strict referrer policy, no `X-Powered-By`
+- Cross-site request protection: writes must be JSON from the site's own origin
+- Server-side role checks: admin routes for staff/admin only; ordering, rewards and member card for customers only
+- Prices always from the database, parameterised SQL, all user text escaped before rendering
+- No staff/admin passwords in the code (env vars or generated on first start)
 
 ## Run locally
 
@@ -52,20 +59,20 @@ Needs Node.js 22.13 or newer.
 ```bash
 npm install
 npm start          # http://localhost:3000
-npm test           # 41 API + rules tests
+npm test           # 48 API + rules tests
 ```
 
 The database (`data/cafe.db`) is created and filled with demo data on first start. Delete `data/` to reset.
 
-### Demo logins
+### Logins
 
-| Role | Member ID | Password |
+| Role | Login | Password |
 |---|---|---|
-| Admin | `SASU-1000` | `admin123` |
-| Staff | `SASU-1001` | `staff123` |
-| Customer (Bronze) | `SASU-1003` | `demo123` |
-| Customer (Silver) | `SASU-1004` | `demo123` |
-| Customer (Gold) | `SASU-1005` | `demo123` |
+| Demo customer | `SASU-1004` or `mehmet@example.com` | `demo123` |
+| Admin | `SASU-1000` | `ADMIN_PASSWORD` env var |
+| Staff | `SASU-1001`, `SASU-1002` | `STAFF_PASSWORD` env var |
+
+Staff and admin passwords are never stored in the code. Set them as environment variables; if they're missing on first start, the server generates random ones and prints them once in the terminal.
 
 ## Deploy (free, Render)
 

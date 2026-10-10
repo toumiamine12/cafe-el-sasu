@@ -11,3 +11,7 @@ services:
         value: "22"
       - key: NODE_ENV
         value: production
+      - key: ADMIN_PASSWORD
+        generateValue: true   # set by Render; read it in the dashboard under Environment
+      - key: STAFF_PASSWORD
+        generateValue: true

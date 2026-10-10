@@ -7,6 +7,7 @@ const fmtSlot = new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', we
 export default {
   title: 'Warenkorb',
   hero: false,
+  guestsOnly: true,
   async mount(root, params, alive) {
     const $ = (id) => root.querySelector('#' + id);
     let menu = [];

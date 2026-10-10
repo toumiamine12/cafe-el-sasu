@@ -4,6 +4,10 @@ import { openDb } from '../server/db.js';
 import { createApp } from '../server/app.js';
 import { validatePickup } from '../server/rules.js';
 
+// Staff/admin passwords come from the environment now; tests pin known values.
+process.env.ADMIN_PASSWORD = 'admin123';
+process.env.STAFF_PASSWORD = 'staff123';
+
 let server, base, db;
 before(async () => {
   db = openDb(':memory:');
@@ -345,4 +349,56 @@ test('old page URLs redirect to hash routes', async () => {
     assert.equal(res.status, 301, old);
     assert.equal(res.headers.get('location'), target, old);
   }
+});
+
+// --- security --------------------------------------------------------------------
+
+test('responses carry security headers and hide Express', async () => {
+  const res = await fetch(base + '/');
+  const csp = res.headers.get('content-security-policy');
+  assert.match(csp, /script-src 'self'(;|$)/);
+  assert.match(csp, /frame-ancestors 'none'/);
+  assert.equal(res.headers.get('x-frame-options'), 'DENY');
+  assert.equal(res.headers.get('x-content-type-options'), 'nosniff');
+  assert.equal(res.headers.get('referrer-policy'), 'strict-origin-when-cross-origin');
+  assert.equal(res.headers.get('x-powered-by'), null);
+});
+
+test('write requests must be JSON from our own origin', async () => {
+  const post = (headers, body) => fetch(base + '/api/login', { method: 'POST', headers, body });
+  assert.equal((await post({ 'content-type': 'text/plain' }, 'id=SASU-1003&password=demo123')).status, 403);
+  assert.equal((await post({ 'content-type': 'application/x-www-form-urlencoded' }, 'id=x')).status, 403);
+  assert.equal((await post({ 'content-type': 'application/json', origin: 'https://evil.example' }, '{"id":"SASU-1003","password":"demo123"}')).status, 403);
+  assert.equal((await post({ 'content-type': 'application/json', origin: base }, '{"id":"SASU-1003","password":"demo123"}')).status, 200);
+});
+
+test('login is blocked after 5 wrong passwords for an account', async () => {
+  const c = client();
+  await c('POST', '/api/register', { name: 'Brute', email: 'brute@example.com', password: 'richtig123' });
+  for (let i = 0; i < 5; i++) assert.equal((await client()('POST', '/api/login', { id: 'brute@example.com', password: 'falsch' + i })).status, 401);
+  const blocked = await client()('POST', '/api/login', { id: 'brute@example.com', password: 'richtig123' });
+  assert.equal(blocked.status, 429);
+  assert.match(blocked.body.error, /15 Minuten/);
+});
+
+test('new passwords need at least 8 characters', async () => {
+  assert.equal((await client()('POST', '/api/register', { name: 'Kurz', email: 'kurz@example.com', password: '1234567' })).status, 400);
+  assert.equal((await client()('POST', '/api/register', { name: 'Lang', email: 'lang@example.com', password: '12345678' })).status, 201);
+});
+
+test('staff and admin cannot order, redeem or use customer pages', async () => {
+  for (const [id, pw] of [['SASU-1001', 'staff123'], ['SASU-1000', 'admin123']]) {
+    const c = await login(id, pw);
+    assert.equal((await c('POST', '/api/orders', { items: [{ id: itemByName('Espresso').id, qty: 1 }], pickup_at: nextOpen() })).status, 403, id);
+    assert.equal((await c('GET', '/api/orders')).status, 403, id);
+    assert.equal((await c('GET', '/api/rewards')).status, 403, id);
+    assert.equal((await c('GET', '/api/me/qr')).status, 403, id);
+  }
+});
+
+test('customer gets a QR code of their member ID', async () => {
+  const c = await login('SASU-1003', 'demo123');
+  assert.equal((await fetch(base + '/api/me/qr')).status, 401); // no session cookie
+  const r = await c('GET', '/api/me/qr');
+  assert.equal(r.status, 200);
 });

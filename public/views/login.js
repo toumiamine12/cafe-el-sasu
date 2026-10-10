@@ -24,11 +24,6 @@ export default {
       $('logged-in').hidden = false;
       $('logged-in-as').innerHTML = `Eingeloggt als <strong>${esc(user.name)}</strong> (${ROLE_LABEL[user.role]}, ${esc(user.member_id)}).`;
       $('continue').href = destination(user, next);
-      $('logout').addEventListener('click', async () => {
-        await api('/api/logout', { method: 'POST' });
-        await session.refresh();
-        go('#/login');
-      });
       return;
     }
 
@@ -39,9 +34,6 @@ export default {
       $('register-fields').hidden = !register;
       $('login-fields').hidden = register;
       $('form-title').textContent = $('submit').textContent = register ? 'Mitglied werden' : 'Einloggen';
-      $('form-sub').textContent = register
-        ? 'Kostenlos, in einer Minute erledigt. Deine Mitgliedsnummer bekommst du sofort.'
-        : 'Mit Mitgliedsnummer oder E-Mail – für Gäste, Personal und Admin.';
       $('auth-hello').textContent = register ? 'Schön, dich kennenzulernen' : 'Willkommen zurück';
       $('password').autocomplete = register ? 'new-password' : 'current-password';
       $('error').textContent = '';

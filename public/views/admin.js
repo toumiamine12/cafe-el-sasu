@@ -147,11 +147,6 @@ export default {
     });
 
     // --- start (the router only lets staff and admin in) ---
-    $('logout').addEventListener('click', async () => {
-      await api('/api/logout', { method: 'POST' });
-      await session.refresh();
-      go('#/');
-    });
 
     user = await session.get();
     root.querySelectorAll('[data-admin]').forEach((b) => { b.hidden = user.role !== 'admin'; });

@@ -38,6 +38,11 @@ export default {
 
     const user = await session.refresh(); // fresh points for the loyalty block
     if (!user || !alive()) return;
+    if (user.role !== 'customer') { // staff/admin: no loyalty or reorder, just a way to the dashboard
+      $('hero-second').textContent = 'Zum Dashboard';
+      $('hero-second').href = '#/admin';
+      return;
+    }
     $('loyalty-sub').textContent = `Du bist ${user.tier.name}-Mitglied mit ${user.points} Punkten.`;
     $('loyalty-cta').innerHTML = user.tier.next
       ? `<a class="btn-cafe" href="#/konto">Noch ${user.tier.next - user.lifetime_points} Punkte bis ${user.tier.name === 'Bronze' ? 'Silver' : 'Gold'} – zu deinem Konto</a>`

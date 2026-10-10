@@ -11,7 +11,7 @@ let timer;
 export default {
   title: 'Mein Konto',
   hero: true,
-  auth: 'user',
+  auth: 'customer',
   async mount(root, params, alive) {
     const $ = (id) => root.querySelector('#' + id);
     let user;
@@ -51,6 +51,7 @@ export default {
           <div class="mid">${esc(user.member_id)}</div>
           <div>${esc(user.name)}</div>
         </div>
+        <button class="qr" type="button" id="qr-open" aria-label="QR-Code groß anzeigen"><img src="/api/me/qr" alt="" width="64" height="64" /></button>
         <div>
           <div class="pts"><strong>${user.points}</strong> Punkte${t.discountPct ? ` · ${t.discountPct}% Rabatt` : ''}</div>
           <div class="progress on-dark" role="progressbar" aria-label="Fortschritt zur nächsten Stufe" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"><div style="width:${pct}%"></div></div>
@@ -165,11 +166,6 @@ export default {
       } catch (err) { $('password-error').textContent = err.message; }
     });
 
-    $('logout').addEventListener('click', async () => {
-      await api('/api/logout', { method: 'POST' });
-      await session.refresh();
-      go('#/');
-    });
 
     // --- load + live status -------------------------------------------------------------
     async function refresh() {
@@ -199,6 +195,16 @@ export default {
       clearTimeout(timer);
       if (orders.some((o) => ACTIVE.includes(o.status))) timer = setTimeout(refresh, 10000);
     }
+
+    // Member card QR: tap to show it big at the counter.
+    root.addEventListener('click', (e) => {
+      if (e.target.closest('#qr-open')) {
+        $('qr-mid').textContent = user.member_id;
+        $('qr-dialog').showModal();
+      }
+    });
+    $('qr-close').addEventListener('click', () => $('qr-dialog').close());
+    $('qr-dialog').addEventListener('click', (e) => { if (e.target === e.currentTarget) e.currentTarget.close(); });
 
     showTab('overview');
     await refresh();

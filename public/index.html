@@ -199,7 +199,7 @@
           <section id="logged-in" hidden>
             <h2>Du bist eingeloggt</h2>
             <p id="logged-in-as"></p>
-            <p class="login-actions"><a class="btn-cafe" id="continue" href="#/konto">Weiter</a> <button class="btn-ghost" type="button" id="logout">Ausloggen</button></p>
+            <p class="login-actions"><a class="btn-cafe" id="continue" href="#/konto">Weiter</a></p>
           </section>
 
           <section id="login-panel">
@@ -208,7 +208,6 @@
               <button type="button" role="tab" id="mode-register" aria-selected="false">Registrieren</button>
             </div>
             <h2 id="form-title">Einloggen</h2>
-            <p class="muted" id="form-sub">Mit Mitgliedsnummer oder E-Mail – für Gäste, Personal und Admin.</p>
             <form id="auth-form" class="form-cafe" novalidate>
               <div id="register-fields" hidden>
                 <label for="name">Name</label>
@@ -220,7 +219,7 @@
               </div>
               <div id="login-fields">
                 <label for="id">Mitgliedsnummer oder E-Mail</label>
-                <input id="id" autocomplete="username" placeholder="z. B. SASU-1003" />
+                <input id="id" autocomplete="username" />
               </div>
               <label for="password">Passwort</label>
               <div class="pw">
@@ -232,10 +231,6 @@
               <p class="error" id="error" role="alert"></p>
               <button class="btn-cafe wide" type="submit" id="submit">Einloggen</button>
             </form>
-            <details class="demo">
-              <summary>Demo-Zugänge</summary>
-              <p>Gast: SASU-1003 / demo123<br />Personal: SASU-1001 / staff123<br />Admin: SASU-1000 / admin123</p>
-            </details>
           </section>
         </div>
       </div>
@@ -249,6 +244,13 @@
           <p id="welcome-sub"></p>
         </div>
         <div class="member-card" id="card"></div>
+        <dialog class="qr-dialog" id="qr-dialog" aria-labelledby="qr-title">
+          <h2 id="qr-title">Deine Mitgliedskarte</h2>
+          <img src="/api/me/qr" alt="" width="240" height="240" />
+          <p class="mid" id="qr-mid"></p>
+          <p class="muted">Zeig den Code an der Theke – wir buchen deine Punkte darauf.</p>
+          <button class="btn-cafe" type="button" id="qr-close">Schließen</button>
+        </dialog>
       </div>
     </section>
 
@@ -304,7 +306,6 @@
             <button class="btn-cafe" type="submit">Passwort ändern</button>
           </form>
         </div>
-        <p><button class="btn-ghost" id="logout">Ausloggen</button></p>
       </section>
     </div>
     </template>
@@ -354,7 +355,6 @@
           </form>
           <table class="table" id="menu-table"></table>
         </section>
-        <p style="text-align:center"><button class="btn-ghost" id="logout">Ausloggen</button></p>
       </div>
     </div>
     </template>

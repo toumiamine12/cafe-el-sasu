@@ -3,8 +3,9 @@
 export async function api(path, { method = 'GET', body } = {}) {
   const res = await fetch(path, {
     method,
-    headers: body ? { 'content-type': 'application/json' } : {},
-    body: body && JSON.stringify(body),
+    // Every write is JSON, even without a body: the server rejects anything else (cross-site protection).
+    headers: method === 'GET' ? {} : { 'content-type': 'application/json' },
+    body: method === 'GET' ? undefined : JSON.stringify(body ?? {}),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw Object.assign(new Error(data.error || 'Fehler'), { status: res.status });
@@ -142,22 +143,22 @@ const BAG = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke=
 
 export function renderNav(user) {
   const first = user && esc(user.name.split(' ')[0]);
-  const isStaff = user && user.role !== 'customer';
+  const isStaff = !!user && user.role !== 'customer';
+  document.body.classList.toggle('is-staff', isStaff); // staff/admin don't order: hides cart and add buttons
   document.getElementById('nav-actions').innerHTML =
-    `<a class="nav-cart" href="#/warenkorb" aria-label="Warenkorb">${BAG}<span id="cart-count"></span></a>`
+    (isStaff ? '' : `<a class="nav-cart" href="#/warenkorb" aria-label="Warenkorb">${BAG}<span id="cart-count"></span></a>`)
     + (user ? `
       <div class="nav-user">
         <button class="nav-pill" type="button" aria-haspopup="menu" aria-expanded="false">${first}</button>
         <div class="nav-menu" role="menu">
           <div class="who"><strong>${esc(user.name)}</strong>${esc(user.member_id)} · ${isStaff ? ROLE_LABEL[user.role] : user.tier.name}</div>
-          <a href="#/konto" role="menuitem">Mein Konto</a>
-          ${isStaff ? '<a href="#/admin" role="menuitem">Dashboard</a>' : ''}
+          ${isStaff ? '<a href="#/admin" role="menuitem">Dashboard</a>' : '<a href="#/konto" role="menuitem">Mein Konto</a>'}
           <button class="logout" type="button" role="menuitem" data-logout>Ausloggen</button>
         </div>
       </div>` : '<a class="nav-pill" href="#/login">Login</a>');
   document.querySelectorAll('#nav-links .mobile-only').forEach((a) => a.remove());
   document.getElementById('nav-links').insertAdjacentHTML('beforeend', user
-    ? `<a class="mobile-only" href="#/konto">Mein Konto (${first})</a>${isStaff ? '<a class="mobile-only" href="#/admin">Dashboard</a>' : ''}<button class="mobile-only logout" type="button" data-logout>Ausloggen</button>`
+    ? `${isStaff ? '<a class="mobile-only" href="#/admin">Dashboard</a>' : `<a class="mobile-only" href="#/konto">Mein Konto (${first})</a>`}<button class="mobile-only logout" type="button" data-logout>Ausloggen</button>`
     : '<a class="mobile-only" href="#/login">Login / Mitglied werden</a>');
   updateCartBadge();
 }

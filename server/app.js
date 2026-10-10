@@ -1,4 +1,5 @@
 import express from 'express';
+import QRCode from 'qrcode';
 import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { hashPassword, verifyPassword, tx } from './db.js';
@@ -17,7 +18,7 @@ const publicUser = ({ password_hash, ...u }) => ({ ...u, tier: tierFor(u.lifetim
 // Field checks shared by register and profile edit.
 const checkName = (v) => { if (typeof v !== 'string' || !v.trim() || v.length > 80) fail(400, 'Name fehlt'); };
 const checkEmail = (v) => { if (typeof v !== 'string' || v.length > 120 || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)) fail(400, 'Ungültige E-Mail'); };
-const checkPassword = (v) => { if (typeof v !== 'string' || v.length < 6) fail(400, 'Passwort braucht mindestens 6 Zeichen'); };
+const checkPassword = (v) => { if (typeof v !== 'string' || v.length < 8 || v.length > 200) fail(400, 'Passwort braucht mindestens 8 Zeichen'); };
 const checkBirthday = (v) => {
   const ok = typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && !isNaN(new Date(v)) && new Date(v).toISOString().startsWith(v);
   if (!ok) fail(400, 'Ungültiges Geburtsdatum');
@@ -26,9 +27,67 @@ const checkBirthday = (v) => {
 const berlinDay = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Berlin', month: '2-digit', day: '2-digit' });
 const isBirthday = (u) => !!u.birthday && u.birthday.slice(5) === berlinDay.format(new Date());
 
+// Content-Security-Policy: only our own scripts run; fonts, the Bootstrap CSS and the Maps embed are the only outside sources.
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://maxcdn.bootstrapcdn.com",
+  "font-src 'self' https://fonts.gstatic.com https://maxcdn.bootstrapcdn.com",
+  "img-src 'self' data:",
+  "frame-src https://www.google.com",
+  "connect-src 'self'",
+  "form-action 'self'",
+  "base-uri 'none'",
+  "object-src 'none'",
+  "frame-ancestors 'none'",
+].join('; ');
+
+// Login throttling: 5 wrong passwords per account, 20 per IP, then 15 minutes pause.
+const LOCK_MS = 15 * 60e3;
+function createLimiter() {
+  const fails = new Map(); // key -> { n, until }
+  const hit = (key) => {
+    const f = fails.get(key);
+    return f && f.until > Date.now() ? f : null;
+  };
+  return {
+    blocked: (keys) => keys.some(([key, max]) => (hit(key)?.n ?? 0) >= max),
+    fail(keys) {
+      for (const [key] of keys) {
+        const f = hit(key) ?? { n: 0 };
+        fails.set(key, { n: f.n + 1, until: Date.now() + LOCK_MS });
+      }
+    },
+    reset: (key) => fails.delete(key),
+  };
+}
+
 export function createApp(db) {
   const app = express();
+  app.disable('x-powered-by');
+  if (process.env.NODE_ENV === 'production') app.set('trust proxy', 1); // real client IP behind Render's proxy (login throttling)
+  app.use((req, res, next) => {
+    res.set({
+      'Content-Security-Policy': CSP,
+      'X-Frame-Options': 'DENY',
+      'X-Content-Type-Options': 'nosniff',
+      'Referrer-Policy': 'strict-origin-when-cross-origin',
+      'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+    });
+    next();
+  });
+
+  // Cross-site request protection: writes must be JSON (forms can't send that cross-site without CORS)
+  // and, when the browser says where the request comes from, it must be this site.
+  app.use('/api', (req, res, next) => {
+    if (req.method === 'GET' || req.method === 'HEAD') return next();
+    const origin = req.get('origin');
+    if (origin && new URL(origin).host !== req.get('host')) return res.status(403).json({ error: 'Anfrage von fremder Seite abgelehnt' });
+    if (!req.is('application/json')) return res.status(403).json({ error: 'Nur JSON-Anfragen erlaubt' });
+    next();
+  });
   app.use(express.json({ limit: '20kb' }));
+  const limiter = createLimiter();
   // The site is one page now; old page addresses point to their hash route.
   const OLD_PAGES = {
     '/menu.html': '/#/speisekarte', '/order.html': '/#/warenkorb', '/login.html': '/#/login',
@@ -62,6 +121,7 @@ export function createApp(db) {
     next();
   };
   const loggedIn = requireRole();
+  const customer = requireRole('customer'); // ordering, rewards and the member card are for guests, not staff
 
   // --- auth -----------------------------------------------------------------
   app.post('/api/register', (req, res) => {
@@ -84,7 +144,13 @@ export function createApp(db) {
   app.post('/api/login', (req, res) => {
     const { id, password } = req.body;
     const user = typeof id === 'string' && q('SELECT * FROM users WHERE member_id = ? OR email = ?').get(id.trim().toUpperCase(), id.trim());
-    if (!user || typeof password !== 'string' || !verifyPassword(password, user.password_hash)) fail(401, 'Mitgliedsnummer/E-Mail oder Passwort falsch');
+    const keys = [[`ip:${req.ip}`, 20], [`acct:${user ? user.id : String(id).trim().toLowerCase()}`, 5]];
+    if (limiter.blocked(keys)) fail(429, 'Zu viele Fehlversuche. Bitte in 15 Minuten erneut versuchen.');
+    if (!user || typeof password !== 'string' || !verifyPassword(password, user.password_hash)) {
+      limiter.fail(keys);
+      fail(401, 'Mitgliedsnummer/E-Mail oder Passwort falsch');
+    }
+    limiter.reset(keys[1][0]);
     startSession(res, user.id);
     res.json(publicUser(user));
   });
@@ -118,6 +184,14 @@ export function createApp(db) {
     res.json(withStats(q('SELECT * FROM users WHERE id = ?').get(req.user.id)));
   });
 
+  // Member card QR: encodes the member ID so staff can scan it at the counter.
+  app.get('/api/me/qr', customer, async (req, res, next) => {
+    try {
+      const svg = await QRCode.toString(req.user.member_id, { type: 'svg', margin: 1, color: { dark: '#3b2615', light: '#ffffff' } });
+      res.type('image/svg+xml').set('Cache-Control', 'private, max-age=3600').send(svg);
+    } catch (e) { next(e); }
+  });
+
   app.post('/api/me/password', loggedIn, (req, res) => {
     const { current, next } = req.body;
     if (typeof current !== 'string' || !verifyPassword(current, req.user.password_hash)) fail(401, 'Aktuelles Passwort ist falsch');
@@ -137,7 +211,7 @@ export function createApp(db) {
   const rewardsFor = (u) => q('SELECT * FROM rewards ORDER BY cost_points').all()
     .filter((r) => !r.birthday_only || (tierFor(u.lifetime_points).name === 'Gold' && isBirthday(u) && !usedThisYear(u, r)));
 
-  app.get('/api/rewards', loggedIn, (req, res) => res.json(rewardsFor(req.user)));
+  app.get('/api/rewards', customer, (req, res) => res.json(rewardsFor(req.user)));
 
   // Next 60 valid pickup times on 15-minute marks, within the next 3 days.
   app.get('/api/pickup-slots', (req, res) => {
@@ -171,7 +245,7 @@ export function createApp(db) {
     return orders.map((o) => ({ ...o, items: items.all(o.id) }));
   };
 
-  app.post('/api/orders', loggedIn, (req, res) => {
+  app.post('/api/orders', customer, (req, res) => {
     const { items, pickup_at, reward_id } = req.body;
     if (!Array.isArray(items) || !items.length || items.length > 30) fail(400, 'Warenkorb ist leer');
     const menu = q('SELECT * FROM menu_items WHERE id = ? AND active = 1');
@@ -210,10 +284,10 @@ export function createApp(db) {
     res.status(201).json(withItems([order])[0]);
   });
 
-  app.get('/api/orders', loggedIn, (req, res) =>
+  app.get('/api/orders', customer, (req, res) =>
     res.json(withItems(q('SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC LIMIT 50').all(req.user.id))));
 
-  app.post('/api/orders/:id/cancel', loggedIn, (req, res) => {
+  app.post('/api/orders/:id/cancel', customer, (req, res) => {
     tx(db, () => {
       const o = q('SELECT * FROM orders WHERE id = ? AND user_id = ?').get(Number(req.params.id), req.user.id);
       if (!o) fail(404, 'Bestellung nicht gefunden');
