@@ -32,14 +32,14 @@ export default {
           <section class="menu-sheet" id="cat-${key}" data-cat="${key}">
             <header><h2>${title}</h2><p>${sub}</p></header>
             <div class="menu-list">${list.map((i) => `
-              <article class="menu-item" data-id="${i.id}">
+              <article class="menu-item${i.sold_out ? ' sold-out' : ''}" data-id="${i.id}">
                 <img src="${esc(i.photo)}" alt="" loading="lazy" width="84" height="84" />
                 <div>
                   <div class="name-line"><h3>${esc(i.name)}</h3><span class="dots"></span><span class="price">${euro(i.price_cents)}</span></div>
                   <p>${esc(i.description)}</p>
-                  <div>${tags(i)}</div>
+                  <div>${i.sold_out ? '<span class="tag sold">Ausverkauft</span>' : ''}${tags(i)}</div>
                 </div>
-                <button class="add-btn" type="button" data-quick="${i.id}" aria-label="${esc(i.name)} in den Warenkorb">+</button>
+                <button class="add-btn" type="button" data-quick="${i.id}" aria-label="${esc(i.name)} in den Warenkorb" ${i.sold_out ? 'disabled' : ''}>+</button>
               </article>`).join('')}
             </div>
           </section>`;
@@ -119,6 +119,7 @@ export default {
         return;
       }
       const row = e.target.closest('.menu-item');
+      if (row?.classList.contains('sold-out')) return toast('Heute leider ausverkauft');
       if (row) openItem(items.find((i) => i.id === Number(row.dataset.id)));
     });
 

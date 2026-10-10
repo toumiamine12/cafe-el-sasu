@@ -506,3 +506,64 @@ test('availability marks full windows', async () => {
     db.prepare("UPDATE settings SET value = '1000' WHERE key = 'slot_capacity'").run();
   }
 });
+
+// --- menu & inventory --------------------------------------------------------------
+
+test('staff can mark an item sold out; guests can no longer order it', async () => {
+  const lena = await login('SASU-1001', 'staff123');
+  const anna = await login('SASU-1003', 'demo123');
+  const id = itemByName('Baklava').id;
+  assert.equal((await anna('PATCH', `/api/admin/menu/${id}/sold-out`, { sold_out: 1 })).status, 403);
+  assert.equal((await lena('PATCH', `/api/admin/menu/${id}/sold-out`, { sold_out: 'ja' })).status, 400);
+  const r = await lena('PATCH', `/api/admin/menu/${id}/sold-out`, { sold_out: 1 });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.sold_out, 1);
+  assert.equal((await menuItem('Baklava')).sold_out, 1); // still listed on the Speisekarte
+  const order = await anna('POST', '/api/orders', { items: [{ id, qty: 1 }], pickup_at: nextOpen() });
+  assert.equal(order.status, 400);
+  assert.match(order.body.error, /ausverkauft/);
+  await lena('PATCH', `/api/admin/menu/${id}/sold-out`, { sold_out: 0 });
+  assert.equal((await anna('POST', '/api/orders', { items: [{ id, qty: 1 }], pickup_at: nextOpen() })).status, 201);
+});
+
+test('staff can read the full menu list but not edit it', async () => {
+  const lena = await login('SASU-1001', 'staff123');
+  assert.equal((await lena('GET', '/api/admin/menu')).status, 200);
+  assert.equal((await lena('PATCH', `/api/admin/menu/${itemByName('Espresso').id}`, { description: 'x' })).status, 403);
+});
+
+test('admin edits description, category, tags and photo', async () => {
+  const admin = await login('SASU-1000', 'admin123');
+  const id = itemByName('Zimtschnecke').id;
+  const ok = await admin('PATCH', `/api/admin/menu/${id}`, {
+    description: 'Mit Kardamom', category: 'cake', tags: 'gluten,lactose', photo: 'photos/menu/cinnamonroll.jpg',
+  });
+  assert.equal(ok.status, 200);
+  assert.equal(ok.body.description, 'Mit Kardamom');
+  assert.equal(ok.body.category, 'cake');
+  assert.equal((await admin('PATCH', `/api/admin/menu/${id}`, { photo: 'https://images.example.com/zimt.jpg' })).status, 200);
+  for (const bad of [{ tags: 'vegan,scharf' }, { category: 'tea' }, { photo: 'http://insecure.example/x.jpg' }, { photo: 'photos/../server/app.js' }, { photo: 'javascript:alert(1)' }]) {
+    assert.equal((await admin('PATCH', `/api/admin/menu/${id}`, bad)).status, 400, JSON.stringify(bad));
+  }
+});
+
+test('deleting: never-ordered items go, ordered items are hidden', async () => {
+  const admin = await login('SASU-1000', 'admin123');
+  const lena = await login('SASU-1001', 'staff123');
+  const fresh = (await admin('POST', '/api/admin/menu', { name: 'Testkuchen', category: 'cake', price_cents: 300 })).body;
+  assert.equal((await lena('DELETE', `/api/admin/menu/${fresh.id}`)).status, 403);
+  const gone = await admin('DELETE', `/api/admin/menu/${fresh.id}`);
+  assert.deepEqual(gone.body, { deleted: true });
+  assert.equal(db.prepare('SELECT 1 FROM menu_items WHERE id = ?').get(fresh.id), undefined);
+  const ordered = itemByName('Cappuccino').id;
+  const hidden = await admin('DELETE', `/api/admin/menu/${ordered}`);
+  assert.deepEqual(hidden.body, { deleted: false, hidden: true });
+  assert.equal(itemByName('Cappuccino').active, 0);
+  db.prepare('UPDATE menu_items SET active = 1 WHERE id = ?').run(ordered);
+  assert.equal((await admin('DELETE', '/api/admin/menu/999999')).status, 404);
+});
+
+test('photos may come from https sites', async () => {
+  const csp = (await fetch(base + '/')).headers.get('content-security-policy');
+  assert.match(csp, /img-src 'self' data: https:/);
+});

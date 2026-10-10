@@ -33,7 +33,7 @@ const CSP = [
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://maxcdn.bootstrapcdn.com",
   "font-src 'self' https://fonts.gstatic.com https://maxcdn.bootstrapcdn.com",
-  "img-src 'self' data:",
+  "img-src 'self' data: https:", // menu photos may be hosted elsewhere (https only)
   "frame-src https://www.google.com",
   "connect-src 'self'",
   "form-action 'self'",
@@ -83,7 +83,8 @@ export function createApp(db) {
     if (req.method === 'GET' || req.method === 'HEAD') return next();
     const origin = req.get('origin');
     if (origin && new URL(origin).host !== req.get('host')) return res.status(403).json({ error: 'Anfrage von fremder Seite abgelehnt' });
-    if (!req.is('application/json')) return res.status(403).json({ error: 'Nur JSON-Anfragen erlaubt' });
+    // Checked on the header itself: HTML forms always send a non-JSON type, even with an empty body.
+    if (!/^application\/json\b/i.test(req.get('content-type') || '')) return res.status(403).json({ error: 'Nur JSON-Anfragen erlaubt' });
     next();
   });
   app.use(express.json({ limit: '20kb' }));
@@ -295,6 +296,7 @@ export function createApp(db) {
       if (!Number.isInteger(qty) || qty < 1 || qty > 20) fail(400, 'Ungültige Menge');
       const m = Number.isInteger(id) && menu.get(id);
       if (!m) fail(400, 'Artikel nicht verfügbar');
+      if (m.sold_out) fail(400, `${m.name} ist leider ausverkauft`);
       if (!Array.isArray(mods) || mods.length > 10 || !mods.every(Number.isInteger)) fail(400, 'Ungültige Optionen');
       try {
         return { ...m, qty, mods: validateModifiers(groupsByItem.get(m.id) ?? [], mods) };
@@ -423,21 +425,52 @@ export function createApp(db) {
     res.json({ revenue, wages, profit: revenue - wages, orders, top });
   });
 
+  const TAGS = ['vegan', 'gluten', 'nuts', 'lactose'];
+  // A photo is a local file under photos/ or an https URL; nothing else reaches an <img src>.
+  const isPhoto = (v) => typeof v === 'string' && v.length <= 500 && (
+    /^photos\/[\w-]+(\/[\w-]+)*\.(jpe?g|png|webp|gif)$/i.test(v)
+    || (/^https:\/\/[^\s"'<>\\]+$/.test(v) && URL.canParse(v) && new URL(v).protocol === 'https:'));
   const MENU_FIELDS = {
     name: (v) => typeof v === 'string' && v.trim().length > 0 && v.length <= 80,
     description: (v) => typeof v === 'string' && v.length <= 300,
     category: (v) => ['coffee', 'cold', 'cake', 'pastry'].includes(v),
     price_cents: (v) => Number.isInteger(v) && v > 0 && v < 100000,
-    photo: (v) => typeof v === 'string' && /^photos\/[\w.-]+$/.test(v),
-    tags: (v) => typeof v === 'string' && v.length <= 100,
+    photo: isPhoto,
+    tags: (v) => typeof v === 'string' && (v === '' || v.split(',').every((t) => TAGS.includes(t))),
     active: (v) => v === 0 || v === 1,
+    sold_out: (v) => v === 0 || v === 1,
   };
-  const menuFields = (body) => Object.entries(body).filter(([k]) => k in MENU_FIELDS).map(([k, v]) => {
+  const menuFields = (body) => Object.entries(body).filter(([k]) => Object.hasOwn(MENU_FIELDS, k)).map(([k, v]) => {
     if (!MENU_FIELDS[k](v)) fail(400, `Ungültiger Wert für ${k}`);
     return [k, v];
   });
 
-  app.get('/api/admin/menu', admin, (req, res) => res.json(q('SELECT * FROM menu_items ORDER BY category, name').all()));
+  // Staff read the list too: they switch items to "Ausverkauft" during service.
+  app.get('/api/admin/menu', staff, (req, res) => res.json(q('SELECT * FROM menu_items ORDER BY category, name').all()));
+
+  app.patch('/api/admin/menu/:id/sold-out', staff, (req, res) => {
+    const { sold_out } = req.body;
+    if (sold_out !== 0 && sold_out !== 1) fail(400, 'sold_out muss 0 oder 1 sein');
+    const r = q('UPDATE menu_items SET sold_out = ? WHERE id = ?').run(sold_out, Number(req.params.id));
+    if (!r.changes) fail(404, 'Artikel nicht gefunden');
+    res.json(q('SELECT * FROM menu_items WHERE id = ?').get(Number(req.params.id)));
+  });
+
+  // Never ordered → removed for good. Ordered before → only hidden, so old receipts keep their item.
+  app.delete('/api/admin/menu/:id', admin, (req, res) => {
+    const id = Number(req.params.id);
+    const result = tx(db, () => {
+      if (!q('SELECT 1 FROM menu_items WHERE id = ?').get(id)) fail(404, 'Artikel nicht gefunden');
+      if (q('SELECT 1 FROM order_items WHERE menu_item_id = ?').get(id)) {
+        q('UPDATE menu_items SET active = 0 WHERE id = ?').run(id);
+        return { deleted: false, hidden: true };
+      }
+      q('DELETE FROM menu_item_modifier_groups WHERE menu_item_id = ?').run(id);
+      q('DELETE FROM menu_items WHERE id = ?').run(id);
+      return { deleted: true };
+    });
+    res.json(result);
+  });
 
   app.post('/api/admin/menu', admin, (req, res) => {
     const fields = menuFields(req.body);

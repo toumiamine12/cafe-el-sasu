@@ -31,7 +31,7 @@ export default {
             <h3>${esc(i.name)}</h3>
             <p>${esc(i.description)}</p>
             <div class="pop-foot"><strong>${euro(i.price_cents)}</strong>
-              <button class="add-btn" type="button" data-add="${i.id}" aria-label="${esc(i.name)} in den Warenkorb">+</button></div>
+              ${i.sold_out ? '<span class="tag sold">Ausverkauft</span>' : `<button class="add-btn" type="button" data-add="${i.id}" aria-label="${esc(i.name)} in den Warenkorb">+</button>`}</div>
           </div>
         </article>`).join('');
     }).catch(() => { if (alive()) $('popular').innerHTML = '<p class="muted">Gerade nicht verfügbar.</p>'; });

@@ -308,6 +308,11 @@ body { font-family: var(--text); color: var(--espresso); min-height: 100vh; disp
 .add-btn:hover { background: var(--caramel); color: #fff; }
 .add-btn:active { transform: scale(0.92); }
 .menu-empty { text-align: center; padding: 48px 16px; }
+.menu-item.sold-out { cursor: default; }
+.menu-item.sold-out img { filter: grayscale(1); opacity: 0.55; }
+.menu-item.sold-out h3, .menu-item.sold-out .price { color: var(--muted); }
+.add-btn:disabled { opacity: 0.35; cursor: not-allowed; background: #fff; color: var(--roast); }
+.tag.sold { background: var(--espresso); color: #fff; font-weight: 700; }
 
 /* item dialog */
 .item-dialog {
