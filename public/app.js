@@ -54,18 +54,36 @@ function toast(msg) {
   t.timer = setTimeout(() => t.classList.remove('show'), 2500);
 }
 
-// --- nav: add cart + account links to every page ------------------------------
+// --- nav: active page, cart, account, scroll + phone menu ---------------------
 const me = api('/api/me').catch(() => null);  // null when logged out
 
 (async () => {
-  const ul = document.querySelector('#myNavbar ul');
-  if (!ul) return;
+  const nav = document.getElementById('site-nav');
+  if (!nav) return;
+  const page = location.pathname.split('/').pop() || 'index.html';
+  nav.querySelectorAll('.nav-links a').forEach((a) => { if (a.getAttribute('href') === page) a.setAttribute('aria-current', 'page'); });
+
+  // Transparent over the banner photo, solid once scrolled.
+  const onScroll = () => nav.classList.toggle('solid', !document.body.classList.contains('has-hero') || scrollY > 40);
+  addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+
+  const toggle = document.getElementById('nav-toggle');
+  toggle.addEventListener('click', () => {
+    const open = nav.classList.toggle('open');
+    toggle.setAttribute('aria-expanded', open);
+    toggle.setAttribute('aria-label', open ? 'Menü schließen' : 'Menü öffnen');
+  });
+
   const user = await me;
-  const link = (href, html) => `<li><a href="${href}" class="nav-link normal-link">${html}</a></li>`;
-  ul.insertAdjacentHTML('beforeend',
-    link('order.html', 'Warenkorb <span id="cart-count" class="badge"></span>') +
-    (user ? link('account.html', esc(user.name.split(' ')[0])) : link('login.html', 'Login')) +
-    (user && user.role !== 'customer' ? link('admin.html', 'Admin') : ''));
+  const bag = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 7h12l-1 13H7L6 7Z"/><path d="M9 7a3 3 0 0 1 6 0"/></svg>';
+  document.getElementById('nav-actions').innerHTML =
+    (user && user.role !== 'customer' ? '<a class="nav-admin" href="admin.html">Admin</a>' : '')
+    + `<a class="nav-cart" href="order.html" aria-label="Warenkorb">${bag}<span id="cart-count"></span></a>`
+    + (user ? `<a class="nav-pill" href="account.html">${esc(user.name.split(' ')[0])}</a>` : '<a class="nav-pill" href="login.html">Login</a>');
+  document.getElementById('nav-links').insertAdjacentHTML('beforeend', user
+    ? `<a class="mobile-only" href="account.html">Mein Konto (${esc(user.name.split(' ')[0])})</a>`
+    : '<a class="mobile-only" href="login.html">Login / Mitglied werden</a>');
   updateCartBadge();
 })();
 

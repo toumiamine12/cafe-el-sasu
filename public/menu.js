@@ -48,7 +48,7 @@ const spy = new IntersectionObserver((entries) => {
       $('cat-nav').querySelectorAll('a').forEach((a) => a.setAttribute('aria-current', a.dataset.cat === e.target.id));
     }
   }
-}, { rootMargin: '-80px 0px -60% 0px' });
+}, { rootMargin: '-150px 0px -55% 0px' });
 const observeSections = () => document.querySelectorAll('.menu-sheet').forEach((s) => spy.observe(s));
 
 $('search').addEventListener('input', () => { render(); observeSections(); });
