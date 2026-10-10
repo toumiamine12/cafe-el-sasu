@@ -156,6 +156,7 @@ const LATER_COLUMNS = [
   ['users', 'active', 'INTEGER NOT NULL DEFAULT 1'],
   ['users', 'must_change_password', 'INTEGER NOT NULL DEFAULT 0'],
   ['users', 'preferences', "TEXT NOT NULL DEFAULT '{}'"],
+  ['users', 'birthday_changed_at', 'TEXT'],
   ['orders', 'gift_id', 'INTEGER REFERENCES gifts(id)'],
 ];
 const DEFAULT_SETTINGS = { slot_capacity: () => process.env.SLOT_CAPACITY || '5', orders_paused: () => '0', extra_delay_min: () => '0' };

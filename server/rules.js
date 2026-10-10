@@ -156,3 +156,7 @@ export const BEAN_PRICES = {
   decaf: { '250g': 950, '1kg': 3190 },
 };
 export const addWeeks = (dateIso, weeks) => new Date(Date.parse(`${dateIso}T00:00:00Z`) + weeks * 7 * 864e5).toISOString().slice(0, 10);
+
+// One birthday treat per birthday: not again within 300 days (a calendar-year check would allow
+// two treats when the birthday week spans new year).
+export const birthdayTreatOpen = (lastUsedIso, now = new Date()) => !lastUsedIso || now - Date.parse(lastUsedIso) > 300 * 864e5;

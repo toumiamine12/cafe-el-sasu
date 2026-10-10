@@ -232,7 +232,10 @@ export async function orderPulse() {
   const user = session.user;
   if (!user || user.role !== 'customer') return showReady([]);
   let orders;
-  try { orders = await api('/api/orders'); } catch { return; }
+  try { orders = await api('/api/orders'); } catch (err) {
+    if (err.status !== 401) pulseTimer = setTimeout(orderPulse, 15000); // network blip: keep checking
+    return;
+  }
   const open = orders.filter((o) => ['new', 'preparing', 'ready'].includes(o.status));
   showReady(open.filter((o) => o.status === 'ready' && !dismissed().includes(o.id)));
   if (open.length) pulseTimer = setTimeout(orderPulse, 15000);

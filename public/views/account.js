@@ -167,7 +167,7 @@ export default {
       $('bday-banner').hidden = !user.birthday_week;
       $('bday-banner').innerHTML = user.birthday_week
         ? `<strong>Alles Gute zum Geburtstag, ${esc(user.name.split(' ')[0])}!</strong>
-           <span>${bday ? 'Dein Geburtstagskaffee geht auf uns – wähle im Warenkorb die Prämie „Geburtstagskaffee“.' : 'Deinen Geburtstagskaffee hast du dieses Jahr schon genossen. Schön, dass du da bist!'}</span>`
+           <span>${bday ? 'Dein Geburtstagskaffee geht auf uns – wähle im Warenkorb die Prämie „Geburtstagskaffee“.' : 'Schön, dass du da bist – feier schön!'}</span>`
         : '';
     }
 

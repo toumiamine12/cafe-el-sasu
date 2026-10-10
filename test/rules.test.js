@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { tierFor, isOpenAt, validatePickup, priceOrder, pointsFor, nextChange, validateModifiers, slotStart, SLOT_CAPACITY, netMinutes, breakShortfall, payCents,
-  inBirthdayWeek, usualCombo, usualTime, BEAN_PRICES, addWeeks } from '../server/rules.js';
+  inBirthdayWeek, usualCombo, usualTime, BEAN_PRICES, addWeeks, birthdayTreatOpen } from '../server/rules.js';
 
 // Berlin is UTC+2 in summer: 2026-07-07 is a Tuesday.
 const berlin = (iso) => new Date(iso + '+02:00');
@@ -179,4 +179,10 @@ test('bean prices and pickup rhythm', () => {
   assert.equal(BEAN_PRICES.espresso['250g'], 890);
   assert.equal(addWeeks('2026-10-12', 2), '2026-10-26');
   assert.equal(addWeeks('2026-12-28', 1), '2027-01-04');
+});
+
+test('birthday treat: once per birthday, also when the week spans new year', () => {
+  assert.equal(birthdayTreatOpen(null, new Date('2027-01-01T10:00:00Z')), true);
+  assert.equal(birthdayTreatOpen('2026-12-28T10:00:00Z', new Date('2027-01-01T10:00:00Z')), false);
+  assert.equal(birthdayTreatOpen('2026-01-02T10:00:00Z', new Date('2026-12-30T10:00:00Z')), true); // last birthday's treat
 });

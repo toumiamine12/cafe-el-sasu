@@ -988,13 +988,37 @@ test('gift paid at the counter: pending until staff activate it; cancel refunds 
   assert.equal(db.prepare('SELECT points FROM users WHERE id = ?').get(id).points, 100);
 });
 
+function pickedUpOrder(email) {
+  const uid = db.prepare('SELECT id FROM users WHERE email = ?').get(email).id;
+  const o = db.prepare(`INSERT INTO orders (user_id, pickup_at, status, subtotal_cents, discount_cents, total_cents) VALUES (?, ?, 'picked_up', 300, 0, 300)`)
+    .run(uid, new Date(Date.now() - 40 * 864e5).toISOString()).lastInsertRowid;
+  db.prepare('INSERT INTO order_items (order_id, menu_item_id, qty, unit_price_cents) VALUES (?, ?, 1, 300)').run(o, itemByName('Croissant').id);
+}
+const dayFromNow = (d) => new Date(Date.now() + d * 864e5).toISOString().slice(0, 10);
+
 test('every member gets the birthday treat during their birthday week', async () => {
   const c = await newGuest('bday');
-  const inThree = new Date(Date.now() + 2 * 864e5).toISOString().slice(0, 10);
-  db.prepare("UPDATE users SET birthday = ? WHERE email = 'bday@example.com'").run('1990' + inThree.slice(4));
+  pickedUpOrder('bday@example.com');
+  // a birthday entered long ago (set directly, like an older account)
+  db.prepare("UPDATE users SET birthday = ?, birthday_changed_at = ? WHERE email = 'bday@example.com'").run('1990' + dayFromNow(2).slice(4), new Date(Date.now() - 90 * 864e5).toISOString());
   assert.ok((await c('GET', '/api/rewards')).body.some((r) => r.birthday_only));
   assert.equal((await c('GET', '/api/me')).body.birthday_week, true);
-  const later = new Date(Date.now() + 20 * 864e5).toISOString().slice(0, 10);
-  db.prepare("UPDATE users SET birthday = ? WHERE email = 'bday@example.com'").run('1990' + later.slice(4));
+  db.prepare("UPDATE users SET birthday = ? WHERE email = 'bday@example.com'").run('1990' + dayFromNow(20).slice(4));
   assert.ok(!(await c('GET', '/api/rewards')).body.some((r) => r.birthday_only));
 });
+
+test('no birthday treat for brand-new accounts or a freshly changed birthday', async () => {
+  // throwaway account: registered today with today's birthday, never picked anything up
+  const fresh = client();
+  await fresh('POST', '/api/register', { name: 'Neu', email: 'farm1@example.com', password: 'kaffee1234', birthday: '1990' + dayFromNow(0).slice(4) });
+  assert.ok(!(await fresh('GET', '/api/rewards')).body.some((r) => r.birthday_only));
+  // even with a picked-up order: a birthday entered today doesn't count for 30 days
+  pickedUpOrder('farm1@example.com');
+  assert.ok(!(await fresh('GET', '/api/rewards')).body.some((r) => r.birthday_only));
+  // an established member who edits the birthday to today doesn't get it either
+  const c = await newGuest('farm2');
+  pickedUpOrder('farm2@example.com');
+  await c('PATCH', '/api/me', { birthday: '1990' + dayFromNow(1).slice(4) });
+  assert.ok(!(await c('GET', '/api/rewards')).body.some((r) => r.birthday_only));
+});
+

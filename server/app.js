@@ -4,7 +4,7 @@ import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { hashPassword, verifyPassword, tx } from './db.js';
 import { tierFor, isOpenAt, validatePickup, priceOrder, pointsFor, nextChange, validateModifiers, slotStart, SLOT_CAPACITY, netMinutes, breakShortfall, payCents,
-  inBirthdayWeek, usualCombo, usualTime, BEAN_PRICES, addWeeks } from './rules.js';
+  inBirthdayWeek, usualCombo, usualTime, BEAN_PRICES, addWeeks, birthdayTreatOpen } from './rules.js';
 
 const SESSION_DAYS = 30;
 const PUBLIC = fileURLToPath(new URL('../public', import.meta.url));
@@ -150,8 +150,8 @@ export function createApp(db) {
     if (birthday) checkBirthday(birthday);
     if (q('SELECT 1 FROM users WHERE email = ?').get(email)) fail(409, 'E-Mail ist bereits registriert');
     const user = tx(db, () => {
-      const { lastInsertRowid } = q('INSERT INTO users (member_id, name, email, password_hash, birthday) VALUES (?, ?, ?, ?, ?)')
-        .run(nextMemberId(), name.trim(), email.trim(), hashPassword(password), birthday || null);
+      const { lastInsertRowid } = q('INSERT INTO users (member_id, name, email, password_hash, birthday, birthday_changed_at) VALUES (?, ?, ?, ?, ?, ?)')
+        .run(nextMemberId(), name.trim(), email.trim(), hashPassword(password), birthday || null, birthday ? new Date().toISOString() : null);
       return q('SELECT * FROM users WHERE id = ?').get(lastInsertRowid);
     });
     startSession(res, user.id);
@@ -206,6 +206,9 @@ export function createApp(db) {
     if (email && q('SELECT 1 FROM users WHERE email = ? AND id != ?').get(email, req.user.id)) fail(409, 'E-Mail ist bereits registriert');
     const values = fields.map(([k, v]) => (k === 'preferences' ? JSON.stringify(v) : typeof v === 'string' ? v.trim() : v));
     q(`UPDATE users SET ${fields.map(([k]) => `${k} = ?`)} WHERE id = ?`).run(...values, req.user.id);
+    if ('birthday' in req.body && req.body.birthday !== req.user.birthday) { // a new birthday only counts for the treat after 30 days
+      q('UPDATE users SET birthday_changed_at = ? WHERE id = ?').run(new Date().toISOString(), req.user.id);
+    }
     res.json(withStats(q('SELECT * FROM users WHERE id = ?').get(req.user.id)));
   });
 
@@ -250,11 +253,17 @@ export function createApp(db) {
 
   app.get('/api/menu', (req, res) => res.json(withModifiers(q('SELECT * FROM menu_items WHERE active = 1 ORDER BY category, name').all())));
 
-  // Birthday treat: every member, during their birthday week (±3 days), once per year (a cancelled order gives it back).
-  const usedThisYear = (u, r) => !!q(`SELECT 1 FROM orders WHERE user_id = ? AND reward_id = ? AND status != 'cancelled'
-    AND created_at >= ?`).get(u.id, r.id, `${new Date().getUTCFullYear()}-01-01`);
+  // Birthday treat: every member during their birthday week (±3 days), once per birthday (a cancelled order gives it back).
+  // Against throwaway accounts: at least one picked-up order, and a birthday entered/changed in the last 30 days doesn't count yet.
+  const birthdayTreatFor = (u, r) => {
+    if (!inBirthdayWeek(u.birthday, berlinToday())) return false;
+    if (u.birthday_changed_at && Date.now() - Date.parse(u.birthday_changed_at) < 30 * 864e5) return false;
+    if (!q("SELECT 1 FROM orders WHERE user_id = ? AND status = 'picked_up'").get(u.id)) return false;
+    const last = q(`SELECT MAX(created_at) at FROM orders WHERE user_id = ? AND reward_id = ? AND status != 'cancelled'`).get(u.id, r.id).at;
+    return birthdayTreatOpen(last);
+  };
   const rewardsFor = (u) => q('SELECT * FROM rewards ORDER BY cost_points').all()
-    .filter((r) => !r.birthday_only || (inBirthdayWeek(u.birthday, berlinToday()) && !usedThisYear(u, r)));
+    .filter((r) => !r.birthday_only || birthdayTreatFor(u, r));
 
   app.get('/api/rewards', customer, (req, res) => res.json(rewardsFor(req.user)));
 
