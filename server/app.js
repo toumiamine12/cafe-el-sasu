@@ -3,7 +3,7 @@ import QRCode from 'qrcode';
 import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { hashPassword, verifyPassword, tx } from './db.js';
-import { tierFor, isOpenAt, validatePickup, priceOrder, pointsFor, nextChange, validateModifiers, slotStart, SLOT_CAPACITY } from './rules.js';
+import { tierFor, isOpenAt, validatePickup, priceOrder, pointsFor, nextChange, validateModifiers, slotStart, SLOT_CAPACITY, netMinutes, breakShortfall, payCents } from './rules.js';
 
 const SESSION_DAYS = 30;
 const PUBLIC = fileURLToPath(new URL('../public', import.meta.url));
@@ -383,6 +383,7 @@ export function createApp(db) {
       if (!o) fail(404, 'Bestellung nicht gefunden');
       if (['picked_up', 'cancelled'].includes(o.status)) fail(409, 'Bestellung ist bereits abgeschlossen');
       q('UPDATE orders SET status = ? WHERE id = ?').run(status, o.id);
+      q('INSERT INTO order_events (order_id, user_id, status, at) VALUES (?, ?, ?, ?)').run(o.id, req.user.id, status, new Date().toISOString());
       if (status === 'picked_up') {
         const pts = pointsFor(o.total_cents);
         q('UPDATE users SET points = points + ?, lifetime_points = lifetime_points + ? WHERE id = ?').run(pts, pts, o.user_id);
@@ -396,29 +397,98 @@ export function createApp(db) {
     const open = tx(db, () => {
       const s = q('SELECT id FROM shifts WHERE user_id = ? AND clock_out IS NULL').get(req.user.id);
       const now = new Date().toISOString();
-      if (s) q('UPDATE shifts SET clock_out = ? WHERE id = ?').run(now, s.id);
+      if (s) {
+        q('UPDATE shift_breaks SET end = ? WHERE shift_id = ? AND end IS NULL').run(now, s.id); // clocking out ends a break
+        q('UPDATE shifts SET clock_out = ? WHERE id = ?').run(now, s.id);
+      }
       else q('INSERT INTO shifts (user_id, clock_in) VALUES (?, ?)').run(req.user.id, now);
       return !s;
     });
     res.json({ open });
   });
 
-  // Hours worked since a date; open shifts count up to now.
-  const HOURS_SQL = `COALESCE(SUM((julianday(COALESCE(s.clock_out, ?)) - julianday(s.clock_in)) * 24), 0)`;
+  // --- work time: net minutes (breaks are unpaid), pay, history -------------------------
   const sinceDays = (d) => new Date(Date.now() - d * 864e5).toISOString();
+  const breaksOf = (shiftId) => q('SELECT start, end FROM shift_breaks WHERE shift_id = ? ORDER BY start').all(shiftId);
+  const round2 = (x) => Math.round(x * 100) / 100;
+  // One shift with breaks, net minutes/hours and pay at the person's wage.
+  function shiftDetail(sh, now = new Date()) {
+    const breaks = breaksOf(sh.id);
+    const net = netMinutes(sh.clock_in, sh.clock_out, breaks, now);
+    const breakMin = breaks.reduce((a, b) => a + (Date.parse(b.end ?? now.toISOString()) - Date.parse(b.start)) / 60e3, 0);
+    return { ...sh, break_minutes: Math.round(breakMin), net_minutes: Math.round(net), hours: round2(net / 60), pay_cents: payCents(net, sh.hourly_wage) };
+  }
+  const shiftsSince = (since, userId) => q(`SELECT s.id, s.user_id, u.name, u.member_id, u.hourly_wage, s.clock_in, s.clock_out
+    FROM shifts s JOIN users u ON u.id = s.user_id WHERE s.clock_in >= ? ${userId ? 'AND s.user_id = ?' : ''} ORDER BY s.clock_in DESC`)
+    .all(...(userId ? [since, userId] : [since])).map((sh) => shiftDetail(sh));
+  const netHoursSince = (since, userId) => round2(shiftsSince(since, userId).reduce((a, sh) => a + sh.net_minutes, 0) / 60);
 
   app.get('/api/admin/shifts', staff, (req, res) => {
-    const now = new Date().toISOString();
-    const hours = q(`SELECT ${HOURS_SQL} h FROM shifts s WHERE s.user_id = ? AND s.clock_in >= ?`);
     const people = req.user.role === 'admin'
       ? q("SELECT * FROM users WHERE role IN ('staff','admin') ORDER BY name").all()
       : [req.user];
     res.json(people.map((u) => ({
       id: u.id, name: u.name, member_id: u.member_id, role: u.role, hourly_wage: u.hourly_wage,
       open: !!q('SELECT 1 FROM shifts WHERE user_id = ? AND clock_out IS NULL').get(u.id),
-      hours_week: hours.get(now, u.id, sinceDays(7)).h,
-      hours_month: hours.get(now, u.id, sinceDays(30)).h,
+      hours_week: netHoursSince(sinceDays(7), u.id),
+      hours_month: netHoursSince(sinceDays(30), u.id),
     })));
+  });
+
+  // Start or end a break on your own running shift.
+  app.post('/api/admin/shifts/break', staff, (req, res) => {
+    const onBreak = tx(db, () => {
+      const sh = q('SELECT id FROM shifts WHERE user_id = ? AND clock_out IS NULL').get(req.user.id);
+      if (!sh) fail(409, 'Du bist nicht eingestempelt');
+      const open = q('SELECT id FROM shift_breaks WHERE shift_id = ? AND end IS NULL').get(sh.id);
+      const now = new Date().toISOString();
+      if (open) q('UPDATE shift_breaks SET end = ? WHERE id = ?').run(now, open.id);
+      else q('INSERT INTO shift_breaks (shift_id, start) VALUES (?, ?)').run(sh.id, now);
+      return !open;
+    });
+    res.json({ on_break: onBreak });
+  });
+
+  // Everything "Meine Zeit" shows: running shift, stats, 14 daily totals, history, upcoming rota shifts.
+  const berlinDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Berlin' });
+  app.get('/api/admin/me/work', staff, (req, res) => {
+    const me = req.user;
+    const now = new Date();
+    const open = q(`SELECT s.id, s.user_id, s.clock_in, s.clock_out, ? hourly_wage FROM shifts s WHERE s.user_id = ? AND s.clock_out IS NULL`).get(me.hourly_wage, me.id);
+    let current = null;
+    if (open) {
+      const d = shiftDetail(open, now);
+      current = {
+        shift_id: open.id, clock_in: open.clock_in, worked_minutes: d.net_minutes, break_minutes: d.break_minutes,
+        on_break: !!q('SELECT 1 FROM shift_breaks WHERE shift_id = ? AND end IS NULL').get(open.id),
+        break_shortfall: breakShortfall(d.net_minutes, d.break_minutes),
+      };
+    }
+    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+    const month = shiftsSince(monthStart, me.id);
+    const handled = (since) => q('SELECT COUNT(DISTINCT order_id) n FROM order_events WHERE user_id = ? AND at >= ?').get(me.id, since).n;
+    const recent = shiftsSince(sinceDays(60), me.id);
+    const daily = Array.from({ length: 14 }, (_, i) => {
+      const date = berlinDate.format(new Date(now.getTime() - (13 - i) * 864e5));
+      const mins = recent.filter((sh) => berlinDate.format(new Date(sh.clock_in)) === date).reduce((a, sh) => a + sh.net_minutes, 0);
+      return { date, hours: round2(mins / 60) };
+    });
+    const upcoming = q('SELECT id, start, end, note FROM planned_shifts WHERE user_id = ? AND end >= ? AND start < ? ORDER BY start')
+      .all(me.id, now.toISOString(), new Date(now.getTime() + 14 * 864e5).toISOString());
+    res.json({
+      current,
+      wage_cents: me.hourly_wage,
+      stats: {
+        week_hours: netHoursSince(sinceDays(7), me.id),
+        month_hours: round2(month.reduce((a, sh) => a + sh.net_minutes, 0) / 60),
+        month_pay_cents: month.reduce((a, sh) => a + sh.pay_cents, 0),
+        orders_week: handled(sinceDays(7)),
+        orders_month: handled(monthStart),
+      },
+      daily,
+      shifts: recent.map(({ hourly_wage, ...sh }) => sh),
+      upcoming,
+    });
   });
 
   // --- admin only -----------------------------------------------------------
@@ -431,8 +501,7 @@ export function createApp(db) {
     const since = sinceDays(days);
     const { revenue, orders } = q(`SELECT COALESCE(SUM(total_cents), 0) revenue, COUNT(*) orders FROM orders
       WHERE status = 'picked_up' AND pickup_at >= ?`).get(since);
-    const wages = Math.round(q(`SELECT COALESCE(SUM((julianday(COALESCE(s.clock_out, ?)) - julianday(s.clock_in)) * 24 * u.hourly_wage), 0) w
-      FROM shifts s JOIN users u ON u.id = s.user_id WHERE s.clock_in >= ?`).get(new Date().toISOString(), since).w);
+    const wages = shiftsSince(since).reduce((a, sh) => a + sh.pay_cents, 0); // breaks are unpaid
     const top = q(`SELECT m.name, SUM(oi.qty) qty FROM order_items oi JOIN orders o ON o.id = oi.order_id JOIN menu_items m ON m.id = oi.menu_item_id
       WHERE o.status = 'picked_up' AND o.pickup_at >= ? GROUP BY m.id ORDER BY qty DESC LIMIT 5`).all(since);
     res.json({ revenue, wages, profit: revenue - wages, orders, top });
@@ -585,22 +654,82 @@ export function createApp(db) {
   app.get('/api/admin/shifts/list', admin, (req, res) => {
     const days = RANGES[req.query.range];
     if (!days) fail(400, 'range muss day, week oder month sein');
-    const now = Date.now();
-    const shifts = q(`SELECT s.id, s.user_id, u.name, u.member_id, u.hourly_wage, s.clock_in, s.clock_out
-      FROM shifts s JOIN users u ON u.id = s.user_id WHERE s.clock_in >= ? ORDER BY s.clock_in DESC`).all(sinceDays(days))
-      .map((s) => {
-        const hours = Math.round(((s.clock_out ? Date.parse(s.clock_out) : now) - Date.parse(s.clock_in)) / 36e3) / 100;
-        return { ...s, hours, cost_cents: Math.round(hours * s.hourly_wage) };
-      });
+    const shifts = shiftsSince(sinceDays(days)).map((sh) => ({ ...sh, cost_cents: sh.pay_cents }));
     const totals = [...new Set(shifts.map((s) => s.user_id))].map((uid) => {
       const mine = shifts.filter((s) => s.user_id === uid);
       return {
         user_id: uid, name: mine[0].name, shifts: mine.length,
-        hours: Math.round(mine.reduce((a, s) => a + s.hours, 0) * 100) / 100,
+        hours: round2(mine.reduce((a, s) => a + s.net_minutes, 0) / 60),
         cost_cents: mine.reduce((a, s) => a + s.cost_cents, 0),
       };
     });
     res.json({ shifts, totals });
+  });
+
+  // --- payroll export (CSV for the payroll office / Excel) -------------------------
+  const fmtDay = new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', day: '2-digit', month: '2-digit', year: 'numeric' });
+  const fmtTime = new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', hour: '2-digit', minute: '2-digit' });
+  const de = (n, digits = 2) => n.toFixed(digits).replace('.', ','); // German decimal comma
+  const csvCell = (v) => (/[;"\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v));
+
+  app.get('/api/admin/payroll.csv', admin, (req, res) => {
+    const month = String(req.query.month ?? '');
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) fail(400, 'month im Format JJJJ-MM');
+    const [y, m] = month.split('-').map(Number);
+    const from = new Date(Date.UTC(y, m - 1, 1)).toISOString();
+    const to = new Date(Date.UTC(y, m, 1)).toISOString();
+    const shifts = q(`SELECT s.id, s.user_id, u.name, u.member_id, u.hourly_wage, s.clock_in, s.clock_out FROM shifts s JOIN users u ON u.id = s.user_id
+      WHERE s.clock_in >= ? AND s.clock_in < ? AND s.clock_out IS NOT NULL ORDER BY u.name, s.clock_in`).all(from, to).map((sh) => shiftDetail(sh));
+    const rows = [['Name', 'Mitgliedsnr', 'Datum', 'Beginn', 'Ende', 'Pause (min)', 'Netto-Stunden', 'Stundenlohn', 'Lohn']];
+    for (const name of [...new Set(shifts.map((sh) => sh.name))]) {
+      const mine = shifts.filter((sh) => sh.name === name);
+      for (const sh of mine) {
+        rows.push([sh.name, sh.member_id, fmtDay.format(new Date(sh.clock_in)), fmtTime.format(new Date(sh.clock_in)), fmtTime.format(new Date(sh.clock_out)),
+          sh.break_minutes, de(sh.net_minutes / 60), de(sh.hourly_wage / 100), de(sh.pay_cents / 100)]);
+      }
+      rows.push([`Summe ${name}`, '', '', '', '', mine.reduce((a, sh) => a + sh.break_minutes, 0),
+        de(mine.reduce((a, sh) => a + sh.net_minutes, 0) / 60), '', de(mine.reduce((a, sh) => a + sh.pay_cents, 0) / 100)]);
+    }
+    res.type('text/csv; charset=utf-8')
+      .set('Content-Disposition', `attachment; filename="lohn-${month}.csv"`)
+      .send('\uFEFF' + rows.map((r) => r.map(csvCell).join(';')).join('\r\n') + '\r\n');
+  });
+
+  // --- rota (Dienstplan) ---------------------------------------------------------------
+  const isIso = (v) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(v) && !isNaN(Date.parse(v));
+
+  app.get('/api/admin/rota', staff, (req, res) => {
+    const from = String(req.query.from ?? '');
+    const days = Number(req.query.days ?? 7);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || isNaN(Date.parse(from)) || !Number.isInteger(days) || days < 1 || days > 31) fail(400, 'from=JJJJ-MM-TT, days=1..31');
+    // A few hours of margin: days are Berlin days, timestamps are UTC.
+    const start = new Date(Date.parse(from) - 3 * 3600e3).toISOString();
+    const end = new Date(Date.parse(from) + days * 864e5 + 3 * 3600e3).toISOString();
+    res.json(q(`SELECT p.*, u.name, u.member_id, EXISTS(SELECT 1 FROM shifts s WHERE s.user_id = p.user_id AND s.clock_out IS NULL) on_shift
+      FROM planned_shifts p JOIN users u ON u.id = p.user_id WHERE p.start >= ? AND p.start < ? ORDER BY p.start`).all(start, end));
+  });
+
+  app.post('/api/admin/rota', admin, (req, res) => {
+    const { user_id, start, end, note = '' } = req.body;
+    if (!isIso(start) || !isIso(end)) fail(400, 'Beginn und Ende als Zeitpunkt angeben');
+    const minutes = (Date.parse(end) - Date.parse(start)) / 60e3;
+    if (minutes <= 0) fail(400, 'Ende muss nach dem Beginn liegen');
+    if (minutes > 12 * 60) fail(400, 'Eine Schicht darf höchstens 12 Stunden dauern');
+    if (typeof note !== 'string' || note.length > 80) fail(400, 'Notiz höchstens 80 Zeichen');
+    const row = tx(db, () => {
+      if (!Number.isInteger(user_id) || !q("SELECT 1 FROM users WHERE id = ? AND role IN ('staff','admin') AND active = 1").get(user_id)) fail(400, 'Unbekannter Mitarbeiter');
+      const s0 = new Date(start).toISOString();
+      const e0 = new Date(end).toISOString();
+      if (q('SELECT 1 FROM planned_shifts WHERE user_id = ? AND start < ? AND end > ?').get(user_id, e0, s0)) fail(409, 'Überschneidet sich mit einer anderen Schicht dieser Person');
+      const { lastInsertRowid } = q('INSERT INTO planned_shifts (user_id, start, end, note) VALUES (?, ?, ?, ?)').run(user_id, s0, e0, note.trim());
+      return q('SELECT * FROM planned_shifts WHERE id = ?').get(lastInsertRowid);
+    });
+    res.status(201).json(row);
+  });
+
+  app.delete('/api/admin/rota/:id', admin, (req, res) => {
+    if (!q('DELETE FROM planned_shifts WHERE id = ?').run(Number(req.params.id)).changes) fail(404, 'Schicht nicht gefunden');
+    res.json({ ok: true });
   });
 
   // --- errors ---------------------------------------------------------------

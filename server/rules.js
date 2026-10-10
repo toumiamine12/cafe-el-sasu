@@ -87,3 +87,23 @@ export function validateModifiers(groups, optionIds) {
 // Pickup capacity: at most this many orders per 15-minute window (the settings table can override it).
 export const SLOT_CAPACITY = 5;
 export const slotStart = (date) => new Date(Math.floor(date.getTime() / 900e3) * 900e3);
+
+// --- work time ---------------------------------------------------------------------
+const minutesBetween = (a, b) => (Date.parse(b) - Date.parse(a)) / 60e3;
+
+// Worked minutes of a shift minus its (unpaid) breaks. An open shift or break counts up to `now`.
+export function netMinutes(start, end, breaks, now = new Date()) {
+  const until = (t) => t ?? now.toISOString();
+  const pause = breaks.reduce((sum, b) => sum + minutesBetween(b.start, until(b.end)), 0);
+  return minutesBetween(start, until(end)) - pause;
+}
+
+// German Arbeitszeitgesetz §4: more than 6 h needs 30 min break, more than 9 h needs 45 min.
+// Returns the break minutes still missing.
+export function breakShortfall(workedMinutes, breakMinutes) {
+  const required = workedMinutes > 540 ? 45 : workedMinutes > 360 ? 30 : 0;
+  return Math.max(0, required - breakMinutes);
+}
+
+// Pay for worked minutes at an hourly wage in cents, rounded once.
+export const payCents = (minutes, wageCents) => Math.round((minutes / 60) * wageCents);

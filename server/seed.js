@@ -1,7 +1,7 @@
 // Demo data so a fresh install has a full menu, accounts and some history.
 import { randomBytes } from 'node:crypto';
 import { hashPassword, tx } from './db.js';
-import { priceOrder } from './rules.js';
+import { priceOrder, isOpenAt } from './rules.js';
 
 // [name, description, category, price_cents, photo, tags]
 const MENU = [
@@ -87,9 +87,23 @@ const USERS = [
   ['SASU-1003', 'Anna Schmidt', 'anna@example.com', 'demo123', 'customer', 0, 80, 80, '1998-03-14'],
   ['SASU-1004', 'Mehmet Kaya', 'mehmet@example.com', 'demo123', 'customer', 0, 260, 140, '1990-11-02'],
   ['SASU-1005', 'Sophie Wagner', 'sophie@example.com', 'demo123', 'customer', 0, 620, 310, '1995-06-21'],
+  ['SASU-1007', 'Sara Hoffmann', 'sara@cafe-elsasu.de', 'STAFF', 'staff', 1500, 0, 0, null],
+  ['SASU-1008', 'Tim Schulz', 'tim@cafe-elsasu.de', 'STAFF', 'staff', 1300, 0, 0, null],
+  ['SASU-1009', 'Elif Yıldız', 'elif@cafe-elsasu.de', 'STAFF', 'staff', 1450, 0, 0, null],
+  ['SASU-1010', 'Paul Richter', 'paul@cafe-elsasu.de', 'STAFF', 'staff', 1350, 0, 0, null],
+  ['SASU-1011', 'Nina Wolf', 'nina@cafe-elsasu.de', 'STAFF', 'staff', 1600, 0, 0, null],
   // Bulk history so the finance dashboard shows a realistic month. No usable password.
   ['SASU-1006', 'Laufkundschaft', 'gast@cafe-elsasu.de', null, 'customer', 0, 0, 0, null],
 ];
+
+// UTC instant of a Berlin wall-clock hour on a date (handles summer/winter time).
+const berlinParts = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Berlin', hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+function berlinTime(date, hour) {
+  const guess = new Date(Date.parse(`${date}T00:00:00Z`) + hour * 3600e3);
+  const p = Object.fromEntries(berlinParts.formatToParts(guess).map((x) => [x.type, Number(x.value)]));
+  const offset = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute) - guess.getTime();
+  return new Date(guess.getTime() - offset);
+}
 
 const daysAgo = (d, hour) => {
   const t = new Date(Date.now() - d * 864e5);
@@ -157,6 +171,30 @@ export function seed(db) {
         for (const i of picks) oi.run(lastInsertRowid, i.id, 1, i.price_cents);
       }
       if (d % 7 !== 0) s.run(2 + (d % 2), daysAgo(d, 9), daysAgo(d, 17));
+    }
+
+    // The five newer staff: about four shifts a week each, with a 30-minute break in the middle.
+    const staffIds = db.prepare("SELECT id FROM users WHERE member_id BETWEEN 'SASU-1007' AND 'SASU-1011' ORDER BY member_id").all().map((u) => u.id);
+    const b = db.prepare('INSERT INTO shift_breaks (shift_id, start, end) VALUES (?, ?, ?)');
+    for (let d = 1; d <= 30; d++) {
+      staffIds.forEach((uid, k) => {
+        if ((d + k) % 7 >= 4) return; // days off
+        const startHour = (d + k) % 2 ? 8 : 13; // early or late shift (UTC)
+        const shift = s.run(uid, daysAgo(d, startHour), daysAgo(d, startHour + 8)).lastInsertRowid;
+        b.run(shift, daysAgo(d, startHour + 4), new Date(Date.parse(daysAgo(d, startHour + 4)) + 30 * 60e3).toISOString());
+      });
+    }
+
+    // Rota for the next 14 days: an early and a late shift every opening day, rotating through the team.
+    const team = db.prepare("SELECT id FROM users WHERE role = 'staff' ORDER BY member_id").all().map((u) => u.id);
+    const plan = db.prepare('INSERT INTO planned_shifts (user_id, start, end, note) VALUES (?, ?, ?, ?)');
+    for (let d = 0; d < 14; d++) {
+      const date = new Date(Date.now() + d * 864e5).toISOString().slice(0, 10);
+      if (!isOpenAt(berlinTime(date, 12))) continue; // Monday: closed
+      const weekend = isOpenAt(berlinTime(date, 23));
+      plan.run(team[(2 * d) % team.length], berlinTime(date, weekend ? 9 : 10).toISOString(), berlinTime(date, 16).toISOString(), 'Frühschicht');
+      plan.run(team[(2 * d + 1) % team.length], berlinTime(date, 16).toISOString(), berlinTime(date, weekend ? 24 : 22).toISOString(), 'Spätschicht');
+      if (weekend) plan.run(team[(2 * d + 2) % team.length], berlinTime(date, 11).toISOString(), berlinTime(date, 19).toISOString(), 'Wochenende');
     }
   });
 }

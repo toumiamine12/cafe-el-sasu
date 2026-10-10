@@ -320,6 +320,7 @@
           <button data-tab="menu" data-admin>Speisekarte</button>
           <button data-tab="team" data-admin>Mitarbeiter</button>
           <button data-tab="shifts" data-admin>Schichten</button>
+          <button data-tab="rota">Dienstplan</button>
           <button data-tab="mytime">Meine Zeit</button>
         </div>
 
@@ -338,6 +339,7 @@
               <button class="kds-btn" type="button" id="scan-btn" hidden>Kamera</button>
             </form>
           </div>
+          <div class="kds-today" id="kds-today" aria-label="Heute im Dienst"></div>
           <div id="lookup-result" hidden></div>
           <div class="kds-grid" id="open-orders" aria-live="polite"></div>
         </section>
@@ -416,14 +418,50 @@
             <button data-range="week" aria-pressed="true">7 Tage</button>
             <button data-range="month">30 Tage</button>
           </div>
+          <form class="export-row" id="payroll-form">
+            <label for="payroll-month">Lohnabrechnung für</label>
+            <input id="payroll-month" type="month" required />
+            <a class="btn-cafe" id="payroll-link" href="#">CSV herunterladen</a>
+          </form>
           <div class="stats" id="shift-totals"></div>
           <div class="table-scroll"><table class="table admin-table" id="shift-table"></table></div>
         </section>
 
+        <section class="panel" data-panel="rota" hidden>
+          <div class="panel-head">
+            <h2>Dienstplan</h2>
+            <div class="week-nav"><button class="btn-ghost" type="button" id="rota-prev" aria-label="Vorherige Woche">‹</button>
+              <strong id="rota-label"></strong>
+              <button class="btn-ghost" type="button" id="rota-next" aria-label="Nächste Woche">›</button></div>
+          </div>
+          <form id="rota-form" class="form-cafe rota-form" data-admin hidden>
+            <div><label for="ro-user">Mitarbeiter</label><select id="ro-user" required></select></div>
+            <div><label for="ro-date">Tag</label><input id="ro-date" type="date" required /></div>
+            <div><label for="ro-start">Von</label><input id="ro-start" type="time" value="10:00" required /></div>
+            <div><label for="ro-end">Bis</label><input id="ro-end" type="time" value="16:00" required /></div>
+            <div><label for="ro-note">Notiz</label><input id="ro-note" maxlength="80" placeholder="z. B. Frühschicht" /></div>
+            <div><label>&nbsp;</label><button class="btn-cafe" type="submit">Eintragen</button></div>
+          </form>
+          <p class="error" id="ro-error" role="alert"></p>
+          <div class="table-scroll"><table class="rota-grid" id="rota-grid"></table></div>
+        </section>
+
         <section class="panel" data-panel="mytime" hidden>
-          <h2>Meine Arbeitszeit</h2>
-          <p><button class="btn-cafe" id="clock"></button></p>
-          <div class="stats" id="my-hours"></div>
+          <h2>Meine Zeit</h2>
+          <div class="shift-now" id="shift-now"></div>
+          <div class="stats" id="my-stats"></div>
+          <h3>Letzte 14 Tage</h3>
+          <div class="day-chart" id="day-chart"></div>
+          <div class="mytime-cols">
+            <div>
+              <h3>Meine nächsten Schichten</h3>
+              <div id="my-upcoming"></div>
+            </div>
+            <div>
+              <h3>Verlauf</h3>
+              <div class="table-scroll"><table class="table admin-table" id="my-history"></table></div>
+            </div>
+          </div>
         </section>
       </div>
     </template>

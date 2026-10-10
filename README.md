@@ -56,6 +56,13 @@ Built with **Node.js, Express and SQLite** (`node:sqlite`). The frontend is plai
 - Admin only: full menu editor (name, description, category, price, allergen tags, photo path or https URL), hide/show, delete (never-ordered items are removed, ordered ones hidden)
 - Admin only: staff management — create staff with a temporary password (changed at first login), set hourly wages, deactivate accounts (signs them out, ends a running shift)
 - Admin only: shift table with clock-in/out, hours and wage cost per shift and per employee
+- Admin only: payroll export — one CSV per month (Name; Mitgliedsnr; Datum; Beginn; Ende; Pause; Netto-Stunden; Stundenlohn; Lohn) with totals per employee, ready for Excel / the payroll office
+- Dienstplan (rota): week grid of planned shifts; the owner adds and removes shifts (no overlaps, max 12 h), staff see it read-only, and the kitchen display shows who's on today
+
+**Meine Zeit (every staff member)**
+- Live shift card: clocked in since…, worked time, Pause starten/beenden (breaks are unpaid), reminder when the legal break (30 min after 6 h, 45 min after 9 h) is still open
+- This week's and month's net hours, earnings at your wage, orders you handled
+- 14-day hours chart, your next planned shifts, and the full history with breaks, net hours and pay
 
 **Security**
 - scrypt-hashed passwords (min. 8 characters), HttpOnly SameSite session cookies (Secure in production)
@@ -73,7 +80,7 @@ Needs Node.js 22.13 or newer.
 ```bash
 npm install
 npm start          # http://localhost:3000
-npm test           # 80 API + rules tests
+npm test           # 90 API + rules tests
 ```
 
 The database (`data/cafe.db`) is created and filled with demo data on first start. Delete `data/` to reset.
@@ -84,7 +91,7 @@ The database (`data/cafe.db`) is created and filled with demo data on first star
 |---|---|---|
 | Demo customer | `SASU-1004` or `mehmet@example.com` | `demo123` |
 | Admin | `SASU-1000` | `ADMIN_PASSWORD` env var |
-| Staff | `SASU-1001`, `SASU-1002` | `STAFF_PASSWORD` env var |
+| Staff (7) | `SASU-1001`, `SASU-1002`, `SASU-1007` … `SASU-1011` | `STAFF_PASSWORD` env var |
 
 Staff and admin passwords are never stored in the code. Set them as environment variables; if they're missing on first start, the server generates random ones and prints them once in the terminal.
 

@@ -18,6 +18,7 @@ html { background: url("photos/background.jpg") center / cover; }
 body { font-family: var(--text); color: var(--espresso); min-height: 100vh; display: flex; flex-direction: column; }
 #view { flex: 1 0 auto; } /* pushes the footer to the bottom on short pages */
 :focus-visible { outline: 3px solid var(--caramel); outline-offset: 2px; }
+[hidden] { display: none !important; } /* layout classes (display: grid/flex) must never un-hide an element */
 .muted { color: var(--muted); }
 .error { color: var(--danger); min-height: 1.4em; margin: 8px 0 0; }
 
@@ -802,4 +803,53 @@ body { font-family: var(--text); color: var(--espresso); min-height: 100vh; disp
 @media (max-width: 760px) {
   .ticket .time { font-size: 36px; }
   .kds-toggle { min-width: 0; flex: 1; }
+}
+
+/* ================================ Meine Zeit & Dienstplan ================================ */
+.shift-now { border-radius: 12px; padding: 20px 22px; background: #fff; border: 1px solid var(--line); display: grid; gap: 6px; margin-bottom: 20px; }
+.shift-now .state { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; }
+.shift-now .dot { width: 12px; height: 12px; border-radius: 50%; background: #9a9a9a; }
+.shift-now.on { border-color: #9fd59f; background: #f3fbf1; }
+.shift-now.on .dot { background: #2e9e44; box-shadow: 0 0 0 4px rgba(46, 158, 68, 0.2); }
+.shift-now.pause { border-color: #f0d27a; background: #fffaea; }
+.shift-now.pause .dot { background: #e0b000; }
+.shift-now .big { font-size: 40px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.shift-now .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+.break-hint { margin: 4px 0 0; padding: 8px 12px; border-radius: 8px; background: #fff1d6; color: #7a4b00; font-weight: 600; }
+.day-chart { display: grid; grid-template-columns: repeat(14, minmax(0, 1fr)); gap: 6px; align-items: end; height: 170px; padding: 8px 0 0; }
+.day-chart .day { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; gap: 4px; min-width: 0; }
+.day-chart .bar { width: 100%; max-width: 34px; border-radius: 6px 6px 2px 2px; background: var(--caramel); min-height: 2px; }
+.day-chart .today .bar { background: var(--espresso); }
+.day-chart .h { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.day-chart .d { font-size: 12px; color: var(--muted); }
+.day-chart .today .d { color: var(--espresso); font-weight: 700; }
+.mytime-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); gap: 32px; }
+.export-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 0 0 16px; }
+.export-row label { margin: 0; font-weight: 700; }
+.export-row input { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; }
+.week-nav { display: flex; align-items: center; gap: 10px; }
+.week-nav .btn-ghost { font-size: 18px; padding: 2px 12px; }
+.rota-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0 12px; align-items: end; margin-bottom: 8px; }
+.rota-grid { width: 100%; border-collapse: collapse; min-width: 760px; font-size: 14px; table-layout: fixed; }
+.rota-grid tr > :first-child { width: 140px; }
+.rota-grid th, .rota-grid td { border: 1px solid var(--line); padding: 6px; vertical-align: top; text-align: left; }
+.rota-grid thead th { background: #f6ecdf; text-align: center; font-weight: 700; }
+.rota-grid thead th small { font-weight: 400; color: var(--muted); }
+.rota-grid tbody th { white-space: nowrap; background: #fbf5ec; }
+.rota-grid .today { background: #fff6e0; }
+.rota-grid tr.mine th { color: var(--caramel); }
+.rota-grid .chip { position: relative; background: var(--espresso); color: #fff; border-radius: 6px; padding: 4px 22px 4px 8px; margin-bottom: 4px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.rota-grid tr.mine .chip { background: var(--caramel); }
+.rota-grid .chip small { display: block; font-weight: 400; opacity: 0.85; }
+.rota-grid .chip button { position: absolute; top: 2px; right: 2px; border: none; background: none; color: #fff; font-size: 16px; line-height: 1; padding: 2px 4px; }
+.kds-today { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; font-size: 15px; }
+.kds-today .label { color: var(--kds-dim); font-weight: 700; margin-right: 4px; }
+.kds-today .person { padding: 4px 12px; border-radius: 999px; background: var(--kds-card); border: 1px solid #4a3a2a; }
+.kds-today .person small { color: var(--kds-dim); }
+.kds-today .person.on { border-color: #4cd964; }
+.kds-today .person.on::before { content: "● "; color: #4cd964; }
+@media (max-width: 760px) {
+  .mytime-cols { grid-template-columns: 1fr; gap: 8px; }
+  .day-chart { gap: 3px; }
+  .shift-now .big { font-size: 32px; }
 }

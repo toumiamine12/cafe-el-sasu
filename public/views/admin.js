@@ -10,9 +10,25 @@ const STATE_LABEL = { new: 'Neu', preparing: 'In Arbeit', ready: 'Abholbereit' }
 const CATEGORY = { coffee: 'Kaffee', cold: 'Kalt', cake: 'Kuchen', pastry: 'Gebäck' };
 const TAG_LABEL = { vegan: 'vegan', gluten: 'Gluten', nuts: 'Nüsse', lactose: 'Laktose' };
 const hours = (h) => h.toFixed(1).replace('.', ',') + ' h';
+const fmtShort = new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', day: '2-digit', month: '2-digit' });
+const fmtWeekday = new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', weekday: 'short' });
+const fmtDayTime = new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+const dayKey = (d) => d.toLocaleDateString('en-CA', { timeZone: 'Europe/Berlin' }); // YYYY-MM-DD in Berlin
+const timeRange = (p) => `${fmtClock.format(new Date(p.start))}–${fmtClock.format(new Date(p.end)).replace(/^00:00$/, '24:00')}`;
+function mondayOf(d) {
+  const day = new Date(`${dayKey(d)}T00:00:00`);
+  day.setDate(day.getDate() - ((day.getDay() + 6) % 7));
+  return day;
+}
+function isoWeek(d) {
+  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  t.setUTCDate(t.getUTCDate() + 4 - (t.getUTCDay() || 7));
+  return Math.ceil(((t - Date.UTC(t.getUTCFullYear(), 0, 1)) / 864e5 + 1) / 7);
+}
 const cents = (value) => Math.round(Number(String(value).replace(',', '.')) * 100);
 
 let pollTimer;
+let workTimer; // refreshes "Meine Zeit" while it's open
 let stream; // camera stream of the QR scanner
 let scanTimer;
 
@@ -35,11 +51,12 @@ export default {
     const fail = (el) => (err) => { if (alive()) el.innerHTML = `<p class="error">${esc(err.message)}</p>`; };
 
     // --- tabs ---------------------------------------------------------------------
-    const LOADERS = { kitchen: loadKitchen, soldout: loadSoldOut, finance: loadFinance, menu: loadMenu, team: loadTeam, shifts: loadShifts, mytime: loadMyTime };
+    const LOADERS = { kitchen: loadKitchen, soldout: loadSoldOut, finance: loadFinance, menu: loadMenu, team: loadTeam, shifts: loadShifts, rota: loadRota, mytime: loadMyTime };
     $('admin-tabs').addEventListener('click', (e) => {
       const tab = e.target.dataset.tab;
       if (!tab) return;
       clearTimeout(pollTimer);
+      clearTimeout(workTimer);
       $('admin-tabs').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', b === e.target));
       root.querySelectorAll('[data-panel]').forEach((p) => { p.hidden = p.dataset.panel !== tab; });
       LOADERS[tab]();
@@ -173,6 +190,14 @@ export default {
 
     async function loadKitchen() {
       api('/api/admin/settings').then((s) => alive() && showSettings(s)).catch(() => {});
+      // Who's on today: planned shifts, ● when clocked in.
+      api(`/api/admin/rota?from=${dayKey(new Date())}&days=1`).then((plan) => {
+        if (!alive()) return;
+        const today = plan.filter((p) => dayKey(new Date(p.start)) === dayKey(new Date()));
+        $('kds-today').innerHTML = today.length
+          ? `<span class="label">Heute im Dienst</span>${today.map((p) => `<span class="person${p.on_shift ? ' on' : ''}">${esc(p.name.split(' ')[0])} <small>${timeRange(p)}</small></span>`).join('')}`
+          : '<span class="label">Heute ist niemand eingeplant</span>';
+      }).catch(() => {});
       loadOrders();
     }
 
@@ -341,6 +366,12 @@ export default {
 
     // --- shifts & labour cost (owner) ---------------------------------------------------------
     let shiftRange = 'week';
+    $('payroll-month').value = new Date().toISOString().slice(0, 7);
+    const payrollHref = () => `/api/admin/payroll.csv?month=${$('payroll-month').value}`;
+    $('payroll-link').href = payrollHref();
+    $('payroll-month').addEventListener('change', () => { $('payroll-link').href = payrollHref(); });
+    $('payroll-form').addEventListener('submit', (e) => e.preventDefault());
+
     async function loadShifts() {
       const r = await api(`/api/admin/shifts/list?range=${shiftRange}`).catch(fail($('shift-table')));
       if (!r || !alive()) return;
@@ -361,30 +392,124 @@ export default {
       loadShifts();
     });
 
-    // --- own working time ----------------------------------------------------------------------
-    async function loadMyTime() {
-      const rows = await api('/api/admin/shifts').catch(fail($('my-hours')));
-      if (!rows || !alive()) return;
-      const me = rows.find((r) => r.id === user.id);
-      $('clock').textContent = me?.open ? 'Ausstempeln' : 'Einstempeln';
-      $('my-hours').innerHTML = me ? `<div class="stat"><div class="label">Letzte 7 Tage</div><div class="value">${hours(me.hours_week)}</div></div>
-        <div class="stat"><div class="label">Letzte 30 Tage</div><div class="value">${hours(me.hours_month)}</div></div>` : '';
+    // --- rota (Dienstplan): week grid; the owner adds and removes shifts ----------------------
+    let weekStart = mondayOf(new Date());
+    let staffList = [];
+    async function loadRota() {
+      const days = Array.from({ length: 7 }, (_, i) => new Date(weekStart.getTime() + i * 864e5));
+      $('rota-label').textContent = `KW ${isoWeek(weekStart)} · ${fmtShort.format(days[0])} – ${fmtShort.format(days[6])}`;
+      const [plan, team] = await Promise.all([
+        api(`/api/admin/rota?from=${dayKey(weekStart)}&days=7`).catch(fail($('rota-grid'))),
+        isAdmin ? api('/api/admin/staff').catch(() => []) : Promise.resolve([]),
+      ]);
+      if (!plan || !alive()) return;
+      staffList = team.filter((u) => u.active);
+      if (isAdmin && !$('ro-user').options.length) {
+        $('ro-user').innerHTML = staffList.map((u) => `<option value="${u.id}">${esc(u.name)}</option>`).join('');
+        $('ro-date').value = dayKey(new Date());
+      }
+      const people = [...new Map([...staffList.map((u) => [u.id, u.name]), ...plan.map((p) => [p.user_id, p.name])]).entries()];
+      const today = dayKey(new Date());
+      $('rota-grid').innerHTML = `
+        <thead><tr><th></th>${days.map((d) => `<th class="${dayKey(d) === today ? 'today' : ''}">${fmtWeekday.format(d)}<br /><small>${fmtShort.format(d)}</small></th>`).join('')}</tr></thead>
+        <tbody>${people.map(([uid, name]) => `<tr class="${uid === user.id ? 'mine' : ''}"><th>${esc(name)}</th>${days.map((d) => {
+          const mine = plan.filter((p) => p.user_id === uid && dayKey(new Date(p.start)) === dayKey(d));
+          return `<td class="${dayKey(d) === today ? 'today' : ''}">${mine.map((p) => `<div class="chip">${timeRange(p)}${p.note ? `<small>${esc(p.note)}</small>` : ''}${isAdmin ? `<button type="button" data-unplan="${p.id}" aria-label="Schicht entfernen">×</button>` : ''}</div>`).join('')}</td>`;
+        }).join('')}</tr>`).join('') || `<tr><td colspan="8" class="muted">In dieser Woche ist noch nichts geplant.</td></tr>`}</tbody>`;
     }
-    $('clock').addEventListener('click', async () => {
-      if ($('clock').disabled) return;
-      $('clock').disabled = true; // a double-click would clock in and straight back out
+    $('rota-prev').addEventListener('click', () => { weekStart = new Date(weekStart.getTime() - 7 * 864e5); loadRota(); });
+    $('rota-next').addEventListener('click', () => { weekStart = new Date(weekStart.getTime() + 7 * 864e5); loadRota(); });
+    $('rota-grid').addEventListener('click', async (e) => {
+      const id = e.target.dataset.unplan;
+      if (!id) return;
+      try { await api(`/api/admin/rota/${id}`, { method: 'DELETE' }); toast('Schicht entfernt'); loadRota(); } catch (err) { toast(err.message); }
+    });
+    $('rota-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      $('ro-error').textContent = '';
+      const date = $('ro-date').value;
+      const start = new Date(`${date}T${$('ro-start').value}`);
+      const end = new Date(`${date}T${$('ro-end').value}`);
+      if (end <= start) end.setDate(end.getDate() + 1); // e.g. 16:00 – 00:00 ends next day
       try {
-        const { open } = await api('/api/admin/shifts/clock', { method: 'POST' });
-        toast(open ? 'Eingestempelt – schönen Dienst!' : 'Ausgestempelt');
-        await loadMyTime();
+        await api('/api/admin/rota', { method: 'POST', body: { user_id: Number($('ro-user').value), start: start.toISOString(), end: end.toISOString(), note: $('ro-note').value } });
+        toast('Schicht eingetragen');
+        weekStart = mondayOf(start);
+        loadRota();
+      } catch (err) { $('ro-error').textContent = err.message; }
+    });
+
+    // --- Meine Zeit: running shift, breaks, stats, chart, rota, history ------------------------
+    const dur = (min) => `${Math.floor(min / 60)} h ${String(Math.round(min % 60)).padStart(2, '0')} min`;
+    async function loadMyTime() {
+      clearTimeout(workTimer);
+      const w = await api('/api/admin/me/work').catch(fail($('shift-now')));
+      if (!w || !alive()) return;
+      const c = w.current;
+      $('shift-now').className = `shift-now${c ? (c.on_break ? ' pause' : ' on') : ''}`;
+      $('shift-now').innerHTML = c ? `
+        <div class="state"><span class="dot"></span>Im Dienst seit ${fmtClock.format(new Date(c.clock_in))} Uhr${c.on_break ? ' · gerade in Pause' : ''}</div>
+        <div class="big">${dur(c.worked_minutes)}</div>
+        <div class="muted">Pause bisher: ${c.break_minutes} min · Verdienst heute: ${euro(Math.round((c.worked_minutes / 60) * w.wage_cents))}</div>
+        ${c.break_shortfall ? `<p class="break-hint">Nach ${c.worked_minutes > 540 ? '9' : '6'} Stunden Arbeit stehen dir ${c.worked_minutes > 540 ? 45 : 30} Minuten Pause zu – noch ${c.break_shortfall} min offen.</p>` : ''}
+        <div class="actions"><button class="btn-cafe" type="button" id="break-btn">${c.on_break ? 'Pause beenden' : 'Pause starten'}</button>
+          <button class="btn-ghost" type="button" id="clock-btn">Ausstempeln</button></div>`
+        : `<div class="state">Nicht eingestempelt</div>
+        ${w.upcoming[0] ? `<div class="muted">Nächste Schicht: ${fmtDayTime.format(new Date(w.upcoming[0].start))} – ${fmtClock.format(new Date(w.upcoming[0].end))} Uhr</div>` : ''}
+        <div class="actions"><button class="btn-cafe" type="button" id="clock-btn">Einstempeln</button></div>`;
+
+      const st = w.stats;
+      const tile = (label, value, hint) => `<div class="stat"><div class="label">${label}</div><div class="value">${value}</div><div class="hint">${hint}</div></div>`;
+      $('my-stats').innerHTML = tile('Diese Woche', hours(st.week_hours), 'letzte 7 Tage, ohne Pausen')
+        + tile('Dieser Monat', hours(st.month_hours), 'seit dem 1.')
+        + tile('Verdienst', euro(st.month_pay_cents), `diesen Monat · ${euro(w.wage_cents)}/h`)
+        + tile('Bestellungen', st.orders_week, `bearbeitet in 7 Tagen · ${st.orders_month} im Monat`);
+
+      const max = Math.max(8, ...w.daily.map((d) => d.hours));
+      $('day-chart').innerHTML = w.daily.map((d) => {
+        const date = new Date(`${d.date}T12:00:00`);
+        return `<div class="day${d.date === dayKey(new Date()) ? ' today' : ''}" title="${fmtShort.format(date)}: ${hours(d.hours)}">
+          <span class="h">${d.hours ? d.hours.toFixed(1).replace('.', ',') : ''}</span>
+          <span class="bar" style="height:${(d.hours / max) * 100}%"></span>
+          <span class="d">${fmtWeekday.format(date).slice(0, 2)}</span></div>`;
+      }).join('');
+
+      $('my-upcoming').innerHTML = w.upcoming.length ? w.upcoming.map((p) => `
+        <div class="row-line"><div class="grow"><strong>${fmtDayTime.format(new Date(p.start))} – ${fmtClock.format(new Date(p.end))} Uhr</strong>
+          ${p.note ? `<br /><span class="muted">${esc(p.note)}</span>` : ''}</div></div>`).join('')
+        : '<p class="muted">Keine Schichten in den nächsten 14 Tagen geplant.</p>';
+
+      $('my-history').innerHTML = `
+        <thead><tr><th>Tag</th><th>Zeit</th><th class="num">Pause</th><th class="num">Netto</th><th class="num">Verdienst</th></tr></thead>
+        <tbody>${w.shifts.map((x) => `<tr>
+          <td>${fmtWeekday.format(new Date(x.clock_in))}, ${fmtShort.format(new Date(x.clock_in))}</td>
+          <td>${fmtClock.format(new Date(x.clock_in))} – ${x.clock_out ? fmtClock.format(new Date(x.clock_out)) : '<span class="status ready">läuft</span>'}</td>
+          <td class="num">${x.break_minutes} min</td><td class="num">${hours(x.hours)}</td><td class="num">${euro(x.pay_cents)}</td></tr>`).join('')
+          || '<tr><td colspan="5" class="muted">Noch keine Schichten.</td></tr>'}</tbody>`;
+
+      if (c && !root.querySelector('[data-panel="mytime"]').hidden) workTimer = setTimeout(loadMyTime, 60000); // live timer
+    }
+    $('shift-now').addEventListener('click', async (e) => {
+      const btn = e.target.closest('#break-btn, #clock-btn');
+      if (!btn || btn.disabled) return;
+      btn.disabled = true; // a double-click would toggle twice
+      try {
+        if (btn.id === 'break-btn') {
+          const { on_break } = await api('/api/admin/shifts/break', { method: 'POST' });
+          toast(on_break ? 'Pause gestartet – guten Appetit!' : 'Pause beendet');
+        } else {
+          const { open } = await api('/api/admin/shifts/clock', { method: 'POST' });
+          toast(open ? 'Eingestempelt – schönen Dienst!' : 'Ausgestempelt – schönen Feierabend!');
+        }
       } catch (err) { toast(err.message); }
-      $('clock').disabled = false;
+      loadMyTime();
     });
 
     loadKitchen();
   },
   unmount() {
     clearTimeout(pollTimer); // stop the 10-second order refresh
+    clearTimeout(workTimer);
     stopCamera();
   },
 };

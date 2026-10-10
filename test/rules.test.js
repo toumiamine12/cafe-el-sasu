@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { tierFor, isOpenAt, validatePickup, priceOrder, pointsFor, nextChange, validateModifiers, slotStart, SLOT_CAPACITY } from '../server/rules.js';
+import { tierFor, isOpenAt, validatePickup, priceOrder, pointsFor, nextChange, validateModifiers, slotStart, SLOT_CAPACITY, netMinutes, breakShortfall, payCents } from '../server/rules.js';
 
 // Berlin is UTC+2 in summer: 2026-07-07 is a Tuesday.
 const berlin = (iso) => new Date(iso + '+02:00');
@@ -122,4 +122,26 @@ test('validatePickup honours a longer lead time', () => {
   assert.equal(validatePickup(new Date(now.getTime() + 20 * 60e3), now), null);
   assert.ok(validatePickup(new Date(now.getTime() + 20 * 60e3), now, 30));
   assert.equal(validatePickup(new Date(now.getTime() + 30 * 60e3), now, 30), null);
+});
+
+// --- work time -------------------------------------------------------------------
+const at = (hhmm) => `2026-07-07T${hhmm}:00.000Z`;
+
+test('netMinutes deducts breaks and counts open ones up to now', () => {
+  assert.equal(netMinutes(at('09:00'), at('17:00'), []), 480);
+  assert.equal(netMinutes(at('09:00'), at('17:00'), [{ start: at('12:00'), end: at('12:30') }]), 450);
+  assert.equal(netMinutes(at('09:00'), null, [{ start: at('12:00'), end: null }], new Date(at('12:20'))), 180);
+});
+
+test('breakShortfall follows the 6 h / 9 h rule', () => {
+  assert.equal(breakShortfall(360, 0), 0);    // exactly 6 h: nothing required yet
+  assert.equal(breakShortfall(361, 0), 30);
+  assert.equal(breakShortfall(400, 20), 10);
+  assert.equal(breakShortfall(541, 30), 15);  // over 9 h: 45 min
+  assert.equal(breakShortfall(600, 45), 0);
+});
+
+test('payCents rounds once from minutes', () => {
+  assert.equal(payCents(450, 1400), 10500);
+  assert.equal(payCents(7, 1450), 169); // 7/60 * 1450 = 169.17
 });

@@ -22,7 +22,7 @@ after(() => server.close());
 // Minimal client that keeps the session cookie.
 function client() {
   let cookie = '';
-  return async (method, path, body) => {
+  const call = async (method, path, body) => {
     const res = await fetch(base + path, {
       method,
       headers: { 'content-type': 'application/json', cookie },
@@ -32,7 +32,12 @@ function client() {
     if (set) cookie = set.split(';')[0];
     return { status: res.status, body: await res.json().catch(() => null) };
   };
+  Object.defineProperty(call, 'cookie', { get: () => cookie });
+  return call;
 }
+
+// Raw session cookie of a test client (for requests that need the full response, e.g. CSV).
+const cookieOf = async (c) => c.cookie;
 
 async function login(id, password) {
   const c = client();
@@ -713,4 +718,91 @@ test('until the temporary password is changed, only the password change works', 
   }
   assert.equal((await neu('POST', '/api/me/password', { current: 'Temporaer1', next: 'EigenesPasswort1' })).status, 200);
   assert.equal((await neu('GET', '/api/admin/orders')).status, 200);
+});
+
+// --- work time, payroll, rota ---------------------------------------------------------
+
+test('the team has 7 staff accounts', () => {
+  assert.equal(db.prepare("SELECT COUNT(*) n FROM users WHERE role = 'staff' AND email LIKE '%@cafe-elsasu.de' AND member_id <= 'SASU-1011'").get().n, 7);
+});
+
+test('breaks: start and end on your own open shift', async () => {
+  const sara = await login('sara@cafe-elsasu.de', 'staff123');
+  assert.equal((await sara('POST', '/api/admin/shifts/break')).status, 409); // not clocked in
+  await sara('POST', '/api/admin/shifts/clock');
+  assert.equal((await sara('POST', '/api/admin/shifts/break')).body.on_break, true);
+  const w = (await sara('GET', '/api/admin/me/work')).body;
+  assert.equal(w.current.on_break, true);
+  assert.equal((await sara('POST', '/api/admin/shifts/break')).body.on_break, false);
+  await sara('POST', '/api/admin/shifts/clock'); // clocking out also ends a running break
+  assert.equal((await sara('GET', '/api/admin/me/work')).body.current, null);
+});
+
+test('clocking out ends a running break', async () => {
+  const tim = await login('tim@cafe-elsasu.de', 'staff123');
+  await tim('POST', '/api/admin/shifts/clock');
+  await tim('POST', '/api/admin/shifts/break');
+  await tim('POST', '/api/admin/shifts/clock');
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM shift_breaks WHERE end IS NULL').get().n, 0);
+});
+
+test('my work: stats, daily totals, history with breaks and pay, handled orders', async () => {
+  const elif = await login('elif@cafe-elsasu.de', 'staff123');
+  const anna = await login('SASU-1003', 'demo123');
+  const o = (await anna('POST', '/api/orders', { items: [{ id: itemByName('Croissant').id, qty: 1 }], pickup_at: nextOpen() })).body;
+  await elif('PATCH', `/api/admin/orders/${o.id}`, { status: 'preparing' });
+  const w = (await elif('GET', '/api/admin/me/work')).body;
+  assert.equal(w.daily.length, 14);
+  assert.ok(w.stats.month_hours > 0 && w.stats.month_pay_cents > 0);
+  assert.ok(w.stats.orders_week >= 1);
+  const s = w.shifts.find((x) => x.clock_out && x.break_minutes > 0);
+  assert.ok(s, 'seeded shifts have breaks');
+  const wage = db.prepare("SELECT hourly_wage FROM users WHERE email = 'elif@cafe-elsasu.de'").get().hourly_wage;
+  assert.equal(s.pay_cents, Math.round((s.net_minutes / 60) * wage));
+  assert.ok(Array.isArray(w.upcoming));
+  const anon = await login('SASU-1003', 'demo123');
+  assert.equal((await anon('GET', '/api/admin/me/work')).status, 403);
+});
+
+test('payroll CSV: one row per shift, totals, owner only', async () => {
+  const admin = await login('SASU-1000', 'admin123');
+  const lena = await login('SASU-1001', 'staff123');
+  const month = new Date().toISOString().slice(0, 7);
+  assert.equal((await lena('GET', `/api/admin/payroll.csv?month=${month}`)).status, 403);
+  assert.equal((await admin('GET', '/api/admin/payroll.csv?month=2026-13')).status, 400);
+  const res = await fetch(`${base}/api/admin/payroll.csv?month=${month}`, { headers: { cookie: await cookieOf(admin) } });
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get('content-type'), /text\/csv/);
+  assert.match(res.headers.get('content-disposition'), new RegExp(`lohn-${month}\\.csv`));
+  const text = await res.text();
+  const lines = text.replace(/^\uFEFF/, '').trim().split('\r\n');
+  assert.equal(lines[0], 'Name;Mitgliedsnr;Datum;Beginn;Ende;Pause (min);Netto-Stunden;Stundenlohn;Lohn');
+  assert.ok(lines.some((l) => l.startsWith('Lena Becker;SASU-1001;')));
+  assert.ok(lines.some((l) => l.startsWith('Summe Lena Becker;')));
+  assert.ok(lines.every((l) => l.split(';').length === 9));
+});
+
+test('rota: owner plans shifts, staff can read, overlaps refused', async () => {
+  const admin = await login('SASU-1000', 'admin123');
+  const lena = await login('SASU-1001', 'staff123');
+  const paul = db.prepare("SELECT id FROM users WHERE email = 'paul@cafe-elsasu.de'").get().id;
+  const day = new Date(Date.now() + 20 * 864e5).toISOString().slice(0, 10);
+  const shift = { user_id: paul, start: `${day}T08:00:00.000Z`, end: `${day}T16:00:00.000Z`, note: 'Frühschicht' };
+  assert.equal((await lena('POST', '/api/admin/rota', shift)).status, 403);
+  const r = await admin('POST', '/api/admin/rota', shift);
+  assert.equal(r.status, 201);
+  assert.equal((await admin('POST', '/api/admin/rota', { ...shift, start: `${day}T15:00:00.000Z`, end: `${day}T20:00:00.000Z` })).status, 409);
+  for (const bad of [{ ...shift, end: shift.start }, { ...shift, end: `${day}T23:30:00.000Z`, start: `${day}T06:00:00.000Z` }, { ...shift, user_id: 4 }, { ...shift, start: 'gestern' }]) {
+    assert.equal((await admin('POST', '/api/admin/rota', bad)).status, 400, JSON.stringify(bad));
+  }
+  const week = (await lena('GET', `/api/admin/rota?from=${day}&days=7`)).body;
+  assert.ok(week.some((p) => p.id === r.body.id && p.name === 'Paul Richter'));
+  assert.equal((await admin('GET', '/api/admin/rota?from=gestern&days=7')).status, 400);
+  assert.equal((await lena('DELETE', `/api/admin/rota/${r.body.id}`)).status, 403);
+  assert.equal((await admin('DELETE', `/api/admin/rota/${r.body.id}`)).status, 200);
+  assert.equal((await admin('DELETE', `/api/admin/rota/${r.body.id}`)).status, 404);
+});
+
+test('the rota is seeded for the next two weeks', () => {
+  assert.ok(db.prepare('SELECT COUNT(*) n FROM planned_shifts WHERE start >= ?').get(new Date().toISOString()).n >= 10);
 });

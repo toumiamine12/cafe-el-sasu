@@ -93,6 +93,26 @@ CREATE TABLE IF NOT EXISTS order_item_modifiers (
   name TEXT NOT NULL,
   price_cents INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS shift_breaks (
+  id INTEGER PRIMARY KEY,
+  shift_id INTEGER NOT NULL REFERENCES shifts(id),
+  start TEXT NOT NULL,
+  end TEXT
+);
+CREATE TABLE IF NOT EXISTS order_events (
+  id INTEGER PRIMARY KEY,
+  order_id INTEGER NOT NULL REFERENCES orders(id),
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  status TEXT NOT NULL,
+  at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS planned_shifts (
+  id INTEGER PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  start TEXT NOT NULL,
+  end TEXT NOT NULL,
+  note TEXT NOT NULL DEFAULT ''
+);
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
