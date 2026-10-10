@@ -148,13 +148,6 @@ public/shop.css        all styles
 test/                  node:test suites (rules, API, database)
 ```
 
-## Roadmap
-
-- Online payment (Stripe) and e-mail order confirmations
-- Push notifications when an order is ready
-- Apple / Google Wallet passes for the member card
-- PostgreSQL for multi-instance hosting
-
 ## Credits
 
 The menu photos come from Wikimedia Commons and Flickr under Creative Commons licenses, and each is credited on the in-app *Bildnachweise* page. All other photos and the logo belong to Café el Sasu.
