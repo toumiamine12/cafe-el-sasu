@@ -198,6 +198,24 @@ body { font-family: var(--text); color: var(--espresso); min-height: 100vh; disp
 }
 .tabs button[aria-pressed="true"], .tabs button[aria-selected="true"] { background: var(--caramel); color: #fff; }
 
+/* --- item options (Hafermilch, Extra Shot…) --- */
+.mods { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.mod { display: inline-block; font-size: 12px; font-weight: 700; padding: 1px 8px; border-radius: 999px; background: var(--caramel); color: #fff; }
+.mod.std { background: none; color: var(--muted); font-weight: 400; padding: 1px 4px; }
+.mod-groups { display: grid; gap: 14px; margin-top: 16px; }
+.mod-group { border: none; padding: 0; margin: 0; }
+.mod-group legend { font-size: 14px; font-weight: 700; border: none; margin: 0 0 6px; width: auto; color: var(--espresso); }
+.mod-group legend small { font-weight: 400; color: var(--muted); }
+.mod-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.mod-pill { margin: 0; font-weight: 400; cursor: pointer; }
+.mod-pill input { position: absolute; opacity: 0; pointer-events: none; }
+.mod-pill span { display: inline-block; padding: 7px 14px; border-radius: 999px; border: 1px solid var(--line); background: #fff; font-size: 14px; }
+.mod-pill small { color: var(--muted); }
+.mod-pill input:checked + span { background: var(--espresso); border-color: var(--espresso); color: #fff; }
+.mod-pill input:checked + span small { color: #e9dccb; }
+.mod-pill input:focus-visible + span { outline: 3px solid var(--caramel); outline-offset: 2px; }
+.item-dialog .body { max-height: calc(100vh - 340px); overflow-y: auto; }
+
 /* --- tags & status --- */
 .tag { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 999px; background: #f1e4d3; color: var(--muted); margin: 2px 4px 0 0; }
 .tag.vegan { background: var(--ok-bg); color: var(--ok); }

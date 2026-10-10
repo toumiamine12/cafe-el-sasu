@@ -402,3 +402,58 @@ test('customer gets a QR code of their member ID', async () => {
   const r = await c('GET', '/api/me/qr');
   assert.equal(r.status, 200);
 });
+
+// --- modifiers ---------------------------------------------------------------------
+
+const optionId = (item, name) => item.modifiers.flatMap((g) => g.options).find((o) => o.name === name).id;
+const menuItem = async (name) => (await client()('GET', '/api/menu')).body.find((i) => i.name === name);
+
+test('menu lists modifier groups per item', async () => {
+  const flat = await menuItem('Flat White');
+  assert.deepEqual(flat.modifiers.map((g) => g.name), ['Milch', 'Sirup', 'Extra Shot']);
+  assert.ok(flat.modifiers[0].options.some((o) => o.name === 'Hafermilch' && o.price_cents === 50));
+  assert.deepEqual((await menuItem('Cold Brew')).modifiers.map((g) => g.name), ['Extra Shot', 'Eis']);
+  assert.deepEqual((await menuItem('Cheesecake')).modifiers, []);
+});
+
+test('order with modifiers stores options and charges them', async () => {
+  const c = await login('SASU-1003', 'demo123'); // Bronze: no discount
+  const flat = await menuItem('Flat White');
+  const r = await c('POST', '/api/orders', {
+    items: [{ id: flat.id, qty: 2, mods: [optionId(flat, 'Hafermilch'), optionId(flat, 'Extra Shot')] }],
+    pickup_at: nextOpen(),
+  });
+  assert.equal(r.status, 201);
+  assert.equal(r.body.total_cents, (flat.price_cents + 50 + 80) * 2);
+  assert.deepEqual(r.body.items[0].modifiers.map((m) => m.name), ['Hafermilch', 'Extra Shot']);
+  const listed = (await c('GET', '/api/orders')).body.find((o) => o.id === r.body.id);
+  assert.deepEqual(listed.items[0].modifiers.map((m) => m.name), ['Hafermilch', 'Extra Shot']);
+});
+
+test('required milk defaults to Vollmilch', async () => {
+  const c = await login('SASU-1003', 'demo123');
+  const flat = await menuItem('Flat White');
+  const r = await c('POST', '/api/orders', { items: [{ id: flat.id, qty: 1 }], pickup_at: nextOpen() });
+  assert.deepEqual(r.body.items[0].modifiers.map((m) => m.name), ['Vollmilch']);
+  assert.equal(r.body.total_cents, flat.price_cents);
+});
+
+test('invalid modifiers are rejected', async () => {
+  const c = await login('SASU-1003', 'demo123');
+  const flat = await menuItem('Flat White');
+  const brew = await menuItem('Cold Brew');
+  const pickup_at = nextOpen();
+  for (const mods of [[optionId(brew, 'Viel Eis')], [optionId(flat, 'Hafermilch'), optionId(flat, 'Mandelmilch')], 'x', [1.5]]) {
+    assert.equal((await c('POST', '/api/orders', { items: [{ id: flat.id, qty: 1, mods }], pickup_at })).status, 400, JSON.stringify(mods));
+  }
+});
+
+test('free coffee reward still charges the oat milk', async () => {
+  const c = await login('SASU-1005', 'demo123'); // Gold, 10 %
+  const flat = await menuItem('Flat White');
+  const coffee = db.prepare("SELECT id FROM rewards WHERE category_allowed = 'coffee' AND birthday_only = 0").get();
+  db.prepare("UPDATE users SET points = 500 WHERE member_id = 'SASU-1005'").run();
+  const r = await c('POST', '/api/orders', { items: [{ id: flat.id, qty: 1, mods: [optionId(flat, 'Hafermilch')] }], pickup_at: nextOpen(), reward_id: coffee.id });
+  assert.equal(r.status, 201);
+  assert.equal(r.body.total_cents, 50 - Math.floor(50 * 0.10));
+});

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { tierFor, isOpenAt, validatePickup, priceOrder, pointsFor, nextChange } from '../server/rules.js';
+import { tierFor, isOpenAt, validatePickup, priceOrder, pointsFor, nextChange, validateModifiers } from '../server/rules.js';
 
 // Berlin is UTC+2 in summer: 2026-07-07 is a Tuesday.
 const berlin = (iso) => new Date(iso + '+02:00');
@@ -64,4 +64,44 @@ test('nextChange finds the next opening or closing time', () => {
   assert.equal(nextChange(berlin('2026-07-06T12:00')).getTime(), berlin('2026-07-07T11:00').getTime()); // Mon closed → Tue 11:00
   assert.equal(nextChange(berlin('2026-07-07T22:05')).getTime(), berlin('2026-07-08T11:00').getTime()); // Tue night → Wed 11:00
   assert.equal(nextChange(berlin('2026-07-12T23:50')).getTime(), berlin('2026-07-13T00:00').getTime()); // Sun closes midnight
+});
+
+// --- modifiers ---------------------------------------------------------------------
+const GROUPS = [
+  { id: 1, name: 'Milch', kind: 'one', required: 1, options: [
+    { id: 10, name: 'Vollmilch', price_cents: 0, is_default: 1 },
+    { id: 11, name: 'Hafermilch', price_cents: 50, is_default: 0 },
+  ] },
+  { id: 2, name: 'Sirup', kind: 'one', required: 0, options: [{ id: 20, name: 'Vanille', price_cents: 40, is_default: 0 }] },
+  { id: 3, name: 'Extras', kind: 'many', required: 0, options: [
+    { id: 30, name: 'Extra Shot', price_cents: 80, is_default: 0 },
+    { id: 31, name: 'Sahne', price_cents: 30, is_default: 0 },
+  ] },
+];
+
+test('validateModifiers fills required defaults', () => {
+  assert.deepEqual(validateModifiers(GROUPS, []).map((o) => o.id), [10]);
+});
+
+test('validateModifiers keeps chosen options in group order', () => {
+  assert.deepEqual(validateModifiers(GROUPS, [30, 11, 20]).map((o) => o.id), [11, 20, 30]);
+  assert.deepEqual(validateModifiers(GROUPS, [30, 31]).map((o) => o.id), [10, 30, 31]);
+});
+
+test('validateModifiers rejects bad choices', () => {
+  assert.throws(() => validateModifiers(GROUPS, [99]), /nicht verfügbar/);
+  assert.throws(() => validateModifiers(GROUPS, [10, 11]), /nur eine/);
+  assert.throws(() => validateModifiers(GROUPS, [30, 30]), /doppelt/);
+  assert.throws(() => validateModifiers([], [10]), /nicht verfügbar/);
+  assert.throws(() => validateModifiers([{ id: 4, name: 'Eis', kind: 'one', required: 1, options: [{ id: 40, name: 'Normal', price_cents: 0, is_default: 0 }] }], []), /Eis/);
+});
+
+test('priceOrder adds modifier prices per unit', () => {
+  const lines = [{ price_cents: 459, qty: 2, category: 'coffee', mods: [{ price_cents: 50 }, { price_cents: 80 }] }];
+  assert.deepEqual(priceOrder(lines, null, 0), { subtotal: 1178, discount: 0, total: 1178 });
+});
+
+test('a reward frees the base price, modifiers are still charged', () => {
+  const lines = [{ price_cents: 459, qty: 1, category: 'coffee', mods: [{ price_cents: 50 }] }];
+  assert.deepEqual(priceOrder(lines, { category_allowed: 'coffee' }, 0), { subtotal: 509, discount: 459, total: 50 });
 });

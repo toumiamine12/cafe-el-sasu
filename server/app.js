@@ -3,7 +3,7 @@ import QRCode from 'qrcode';
 import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { hashPassword, verifyPassword, tx } from './db.js';
-import { tierFor, isOpenAt, validatePickup, priceOrder, pointsFor, nextChange } from './rules.js';
+import { tierFor, isOpenAt, validatePickup, priceOrder, pointsFor, nextChange, validateModifiers } from './rules.js';
 
 const SESSION_DAYS = 30;
 const PUBLIC = fileURLToPath(new URL('../public', import.meta.url));
@@ -203,7 +203,25 @@ export function createApp(db) {
   });
 
   // --- menu & rewards -------------------------------------------------------
-  app.get('/api/menu', (req, res) => res.json(q('SELECT * FROM menu_items WHERE active = 1 ORDER BY category, name').all()));
+  // Modifier groups (with options) offered per menu item: Map(itemId -> [group…]).
+  function modifierGroups() {
+    const options = q('SELECT * FROM modifier_options ORDER BY sort, id').all();
+    const groups = q('SELECT * FROM modifier_groups ORDER BY sort, id').all()
+      .map((g) => ({ ...g, options: options.filter((o) => o.group_id === g.id) }));
+    const byItem = new Map();
+    for (const { menu_item_id, group_id } of q('SELECT * FROM menu_item_modifier_groups').all()) {
+      if (!byItem.has(menu_item_id)) byItem.set(menu_item_id, []);
+      byItem.get(menu_item_id).push(groups.find((g) => g.id === group_id));
+    }
+    for (const list of byItem.values()) list.sort((a, b) => a.sort - b.sort);
+    return byItem;
+  }
+  const withModifiers = (items) => {
+    const byItem = modifierGroups();
+    return items.map((i) => ({ ...i, modifiers: byItem.get(i.id) ?? [] }));
+  };
+
+  app.get('/api/menu', (req, res) => res.json(withModifiers(q('SELECT * FROM menu_items WHERE active = 1 ORDER BY category, name').all())));
 
   // Birthday reward: Gold only, on the birthday, once per year (a cancelled order gives it back).
   const usedThisYear = (u, r) => !!q(`SELECT 1 FROM orders WHERE user_id = ? AND reward_id = ? AND status != 'cancelled'
@@ -242,18 +260,26 @@ export function createApp(db) {
   // --- orders ---------------------------------------------------------------
   const withItems = (orders) => {
     const items = q(`SELECT oi.*, m.name, m.photo FROM order_items oi JOIN menu_items m ON m.id = oi.menu_item_id WHERE oi.order_id = ?`);
-    return orders.map((o) => ({ ...o, items: items.all(o.id) }));
+    const mods = q(`SELECT om.option_id, om.group_name, om.name, om.price_cents, COALESCE(mo.is_default, 0) is_default
+      FROM order_item_modifiers om LEFT JOIN modifier_options mo ON mo.id = om.option_id WHERE om.order_item_id = ? ORDER BY om.id`);
+    return orders.map((o) => ({ ...o, items: items.all(o.id).map((i) => ({ ...i, modifiers: mods.all(i.id) })) }));
   };
 
   app.post('/api/orders', customer, (req, res) => {
     const { items, pickup_at, reward_id } = req.body;
     if (!Array.isArray(items) || !items.length || items.length > 30) fail(400, 'Warenkorb ist leer');
     const menu = q('SELECT * FROM menu_items WHERE id = ? AND active = 1');
-    const lines = items.map(({ id, qty }) => {
+    const groupsByItem = modifierGroups();
+    const lines = items.map(({ id, qty, mods = [] }) => {
       if (!Number.isInteger(qty) || qty < 1 || qty > 20) fail(400, 'Ungültige Menge');
       const m = Number.isInteger(id) && menu.get(id);
       if (!m) fail(400, 'Artikel nicht verfügbar');
-      return { ...m, qty };
+      if (!Array.isArray(mods) || mods.length > 10 || !mods.every(Number.isInteger)) fail(400, 'Ungültige Optionen');
+      try {
+        return { ...m, qty, mods: validateModifiers(groupsByItem.get(m.id) ?? [], mods) };
+      } catch (e) {
+        fail(400, `${m.name}: ${e.message}`);
+      }
     });
     const pickup = new Date(pickup_at);
     const err = validatePickup(pickup);
@@ -277,7 +303,13 @@ export function createApp(db) {
       const { lastInsertRowid } = q(`INSERT INTO orders (user_id, pickup_at, subtotal_cents, discount_cents, total_cents, reward_id, reward_points)
         VALUES (?, ?, ?, ?, ?, ?, ?)`).run(user.id, pickup.toISOString(), price.subtotal, price.discount, price.total, reward?.id ?? null, cost);
       const oi = q('INSERT INTO order_items (order_id, menu_item_id, qty, unit_price_cents) VALUES (?, ?, ?, ?)');
-      for (const l of lines) oi.run(lastInsertRowid, l.id, l.qty, l.price_cents);
+      const om = q('INSERT INTO order_item_modifiers (order_item_id, option_id, group_name, name, price_cents) VALUES (?, ?, ?, ?, ?)');
+      const groupName = new Map([...groupsByItem.values()].flat().map((g) => [g.id, g.name]));
+      for (const l of lines) {
+        const unit = l.price_cents + l.mods.reduce((sum, mod) => sum + mod.price_cents, 0);
+        const item = oi.run(lastInsertRowid, l.id, l.qty, unit).lastInsertRowid;
+        for (const mod of l.mods) om.run(item, mod.id, groupName.get(mod.group_id), mod.name, mod.price_cents); // copied: later price changes don't touch old receipts
+      }
       if (cost) q('UPDATE users SET points = points - ? WHERE id = ?').run(cost, user.id);
       return q('SELECT * FROM orders WHERE id = ?').get(lastInsertRowid);
     });

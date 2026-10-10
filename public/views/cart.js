@@ -1,5 +1,5 @@
 // Warenkorb + checkout.
-import { api, euro, esc, cart, session, getMenu } from '../app.js';
+import { api, euro, esc, cart, session, getMenu, lineKey, unitPrice, resolveMods, modBadges } from '../app.js';
 import { go } from '../router.js';
 
 const fmtSlot = new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
@@ -20,24 +20,25 @@ export default {
         $('totals').innerHTML = '';
         return;
       }
-      $('cart-lines').innerHTML = lines.map(({ item, qty }) => `
+      $('cart-lines').innerHTML = lines.map((l) => `
         <div class="row-line">
-          <img src="${esc(item.photo)}" alt="" />
-          <div class="grow"><strong>${esc(item.name)}</strong><br /><span class="muted">${euro(item.price_cents)}</span></div>
+          <img src="${esc(l.item.photo)}" alt="" />
+          <div class="grow"><strong>${esc(l.item.name)}</strong> <span class="muted">${euro(unitPrice(l.item, l.mods))}</span>
+            <div class="mods">${modBadges(resolveMods(l.item, l.mods))}</div></div>
           <div class="qty">
-            <button type="button" data-id="${item.id}" data-d="-1" aria-label="${esc(item.name)} weniger">−</button>
-            <span>${qty}</span>
-            <button type="button" data-id="${item.id}" data-d="1" aria-label="${esc(item.name)} mehr">+</button>
+            <button type="button" data-key="${lineKey(l)}" data-d="-1" aria-label="${esc(l.item.name)} weniger">−</button>
+            <span>${l.qty}</span>
+            <button type="button" data-key="${lineKey(l)}" data-d="1" aria-label="${esc(l.item.name)} mehr">+</button>
           </div>
         </div>`).join('');
-      const subtotal = lines.reduce((s, l) => s + l.item.price_cents * l.qty, 0);
+      const subtotal = lines.reduce((s, l) => s + unitPrice(l.item, l.mods) * l.qty, 0);
       $('totals').innerHTML = `<span class="muted">Zwischensumme</span> <span class="total">${euro(subtotal)}</span>`;
     }
 
     $('cart-lines').addEventListener('click', (e) => {
-      const b = e.target.closest('button[data-id]');
+      const b = e.target.closest('button[data-key]');
       if (!b) return;
-      cart.set(cart.get().map((l) => (l.id === Number(b.dataset.id) ? { ...l, qty: Math.min(20, l.qty + Number(b.dataset.d)) } : l)));
+      cart.set(cart.get().map((l) => (lineKey(l) === b.dataset.key ? { ...l, qty: Math.min(20, l.qty + Number(b.dataset.d)) } : l)));
       renderCart();
     });
 

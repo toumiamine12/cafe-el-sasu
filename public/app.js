@@ -46,25 +46,41 @@ export const ROLE_LABEL = { customer: 'Kunde', staff: 'Personal', admin: 'Admin'
 let menuPromise;
 export const getMenu = () => (menuPromise ||= api('/api/menu').catch((e) => { menuPromise = null; throw e; }));
 
-// --- cart: [{id, qty}] in localStorage ---------------------------------------
+// --- cart: [{ id, qty, mods: [optionId…] }] in localStorage ------------------------
+// The same item with different options (oat milk vs. whole milk) is a separate line.
+export const lineKey = (l) => `${l.id}:${[...(l.mods ?? [])].sort((a, b) => a - b).join(',')}`;
+
 export const cart = {
   get() {
-    try { return JSON.parse(localStorage.getItem('cart')) || []; } catch { return []; }
+    try {
+      return (JSON.parse(localStorage.getItem('cart')) || []).map((l) => ({ ...l, mods: l.mods ?? [] }));
+    } catch { return []; }
   },
   set(items) {
     try { localStorage.setItem('cart', JSON.stringify(items.filter((i) => i.qty > 0))); } catch {}
     updateCartBadge();
-    dispatchEvent(new Event('cartchange'));
   },
-  add(id, qty = 1) {
+  add(id, qty = 1, mods = []) {
     const items = cart.get();
-    const line = items.find((i) => i.id === id);
+    const line = items.find((l) => lineKey(l) === lineKey({ id, mods }));
     if (line) line.qty = Math.min(20, line.qty + qty);
-    else items.push({ id, qty });
+    else items.push({ id, qty, mods: [...mods] });
     cart.set(items);
   },
   count: () => cart.get().reduce((n, i) => n + i.qty, 0),
 };
+
+// Options an item ends up with: the chosen ones plus defaults for required groups (mirrors the server).
+export function resolveMods(item, ids) {
+  return (item.modifiers ?? []).flatMap((g) => {
+    const picked = g.options.filter((o) => ids.includes(o.id));
+    return picked.length || !g.required ? picked : g.options.filter((o) => o.is_default);
+  });
+}
+export const unitPrice = (item, ids) => item.price_cents + resolveMods(item, ids).reduce((s, o) => s + o.price_cents, 0);
+
+// Option badges: custom choices stand out, standard ones (Vollmilch, Normales Eis) stay quiet.
+export const modBadges = (mods) => mods.map((m) => `<span class="mod${m.is_default ? ' std' : ''}">${esc(m.name)}</span>`).join('');
 
 function updateCartBadge() {
   const b = document.getElementById('cart-count');

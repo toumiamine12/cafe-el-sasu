@@ -54,7 +54,7 @@ export default {
     if (last) {
       btn.textContent = 'Letzte Bestellung wiederholen';
       btn.href = '#/warenkorb';
-      btn.addEventListener('click', () => { for (const i of last.items) cart.add(i.menu_item_id, i.qty); });
+      btn.addEventListener('click', () => { for (const i of last.items) cart.add(i.menu_item_id, i.qty, i.modifiers.map((m) => m.option_id).filter(Boolean)); });
     } else {
       btn.textContent = 'Mein Konto';
       btn.href = '#/konto';

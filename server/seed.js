@@ -56,6 +56,22 @@ const MENU = [
   ['Churros', 'Frittiertes Spritzgebäck mit Zimtzucker und Schokodip', 'pastry', 499, 'menu/churros.jpg', 'gluten,lactose'],
 ];
 
+// Modifier groups: [name, kind, required, [[option, price_cents, is_default], …]]
+const MODIFIERS = [
+  ['Milch', 'one', 1, [['Vollmilch', 0, 1], ['Hafermilch', 50, 0], ['Mandelmilch', 50, 0], ['Laktosefrei', 30, 0]]],
+  ['Sirup', 'one', 0, [['Vanille', 40, 0], ['Karamell', 40, 0], ['Haselnuss', 40, 0]]],
+  ['Extra Shot', 'many', 0, [['Extra Shot', 80, 0]]],
+  ['Eis', 'one', 1, [['Wenig Eis', 0, 0], ['Normales Eis', 0, 1], ['Viel Eis', 0, 0]]],
+];
+
+// Which groups an item offers: drinks with milk get Milch + Sirup, coffee and cold drinks get Extra Shot, cold drinks get Eis.
+const groupsFor = (category, tags) => [
+  tags.includes('lactose') && ['coffee', 'cold'].includes(category) && 'Milch',
+  tags.includes('lactose') && ['coffee', 'cold'].includes(category) && 'Sirup',
+  ['coffee', 'cold'].includes(category) && 'Extra Shot',
+  category === 'cold' && 'Eis',
+].filter(Boolean);
+
 const REWARDS = [
   ['Gratis Gebäck', 50, 'pastry', 0],
   ['Gratis Kaffee', 100, 'coffee', 0],
@@ -93,8 +109,18 @@ function secret(envName, label, ids) {
 export function seed(db) {
   const pw = { ADMIN: secret('ADMIN_PASSWORD', 'Admin', 'SASU-1000'), STAFF: secret('STAFF_PASSWORD', 'Personal', 'SASU-1001, SASU-1002') };
   tx(db, () => {
+    const groupId = {};
+    MODIFIERS.forEach(([name, kind, required, options], gi) => {
+      groupId[name] = db.prepare('INSERT INTO modifier_groups (name, kind, required, sort) VALUES (?, ?, ?, ?)').run(name, kind, required, gi).lastInsertRowid;
+      options.forEach(([o, price, def], oi) => db.prepare('INSERT INTO modifier_options (group_id, name, price_cents, is_default, sort) VALUES (?, ?, ?, ?, ?)')
+        .run(groupId[name], o, price, def, oi));
+    });
     const m = db.prepare('INSERT INTO menu_items (name, description, category, price_cents, photo, tags) VALUES (?, ?, ?, ?, ?, ?)');
-    for (const [n, d, c, p, photo, tags] of MENU) m.run(n, d, c, p, `photos/${photo}`, tags);
+    const link = db.prepare('INSERT INTO menu_item_modifier_groups (menu_item_id, group_id) VALUES (?, ?)');
+    for (const [n, d, c, p, photo, tags] of MENU) {
+      const { lastInsertRowid } = m.run(n, d, c, p, `photos/${photo}`, tags);
+      for (const g of groupsFor(c, tags)) link.run(lastInsertRowid, groupId[g]);
+    }
 
     const r = db.prepare('INSERT INTO rewards (name, cost_points, category_allowed, birthday_only) VALUES (?, ?, ?, ?)');
     for (const row of REWARDS) r.run(...row);

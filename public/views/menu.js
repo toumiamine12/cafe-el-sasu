@@ -1,5 +1,5 @@
 // Speisekarte: menu sections per category, search, item dialog, floating cart bar.
-import { euro, esc, cart, toast, getMenu } from '../app.js';
+import { euro, esc, cart, toast, getMenu, unitPrice } from '../app.js';
 
 const CATEGORIES = [
   ['coffee', 'Kaffee', 'Heiß und frisch aus der Siebträgermaschine'],
@@ -66,10 +66,25 @@ export default {
     $('search').addEventListener('input', render);
 
     // --- dialog ---
+    const chosenMods = () => [...root.querySelectorAll('#dlg-mods input:checked')].map((i) => Number(i.value)).filter(Boolean);
     function updateDialogButton() {
       $('dlg-qty').textContent = qty;
-      $('dlg-add').textContent = `In den Warenkorb · ${euro(current.price_cents * qty)}`;
+      $('dlg-add').textContent = `In den Warenkorb · ${euro(unitPrice(current, chosenMods()) * qty)}`;
     }
+    // One fieldset per option group: radio pills for "pick one", checkbox pills for extras.
+    const price = (c) => (c ? `+${euro(c)}` : '');
+    function renderMods(item) {
+      $('dlg-mods').innerHTML = item.modifiers.map((g) => {
+        const type = g.kind === 'one' ? 'radio' : 'checkbox';
+        const none = g.kind === 'one' && !g.required
+          ? `<label class="mod-pill"><input type="radio" name="g${g.id}" value="0" checked /><span>Ohne</span></label>` : '';
+        return `<fieldset class="mod-group"><legend>${esc(g.name)}${g.required ? '' : ' <small>optional</small>'}</legend>
+          <div class="mod-pills">${none}${g.options.map((o) => `
+            <label class="mod-pill"><input type="${type}" name="g${g.id}" value="${o.id}" ${o.is_default ? 'checked' : ''} />
+              <span>${esc(o.name)} <small>${price(o.price_cents)}</small></span></label>`).join('')}</div></fieldset>`;
+      }).join('');
+    }
+    $('dlg-mods').addEventListener('change', updateDialogButton);
     function openItem(item) {
       current = item;
       qty = 1;
@@ -77,6 +92,7 @@ export default {
       $('dlg-name').textContent = item.name;
       $('dlg-desc').textContent = item.description;
       $('dlg-tags').innerHTML = tags(item);
+      renderMods(item);
       updateDialogButton();
       $('item-dialog').showModal();
     }
@@ -85,7 +101,7 @@ export default {
     $('dlg-close').addEventListener('click', () => $('item-dialog').close());
     $('item-dialog').addEventListener('click', (e) => { if (e.target === e.currentTarget) e.currentTarget.close(); });
     $('dlg-add').addEventListener('click', () => {
-      cart.add(current.id, qty);
+      cart.add(current.id, qty, chosenMods());
       $('item-dialog').close();
       toast(`${qty}× ${current.name} im Warenkorb`);
       updateCartBar();
@@ -96,6 +112,7 @@ export default {
       const quick = e.target.closest('[data-quick]');
       if (quick) {
         const item = items.find((i) => i.id === Number(quick.dataset.quick));
+        if (item.modifiers.length) return openItem(item); // drinks: let the guest pick milk, syrup…
         cart.add(item.id);
         toast(`${item.name} im Warenkorb`);
         updateCartBar();
@@ -109,7 +126,7 @@ export default {
     function updateCartBar() {
       const lines = cart.get().map((l) => ({ ...l, item: items.find((i) => i.id === l.id) })).filter((l) => l.item);
       const count = lines.reduce((n, l) => n + l.qty, 0);
-      const total = lines.reduce((s, l) => s + l.qty * l.item.price_cents, 0);
+      const total = lines.reduce((s, l) => s + l.qty * unitPrice(l.item, l.mods), 0);
       $('cart-bar').hidden = !count;
       $('cart-bar-text').innerHTML = `${count} Artikel · <strong>${euro(total)}</strong>`;
     }

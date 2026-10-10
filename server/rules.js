@@ -33,13 +33,16 @@ export function validatePickup(pickupAt, now = new Date()) {
   return null;
 }
 
+// Unit price = base price + chosen modifiers (oat milk, extra shot…).
+const unitPrice = (l) => l.price_cents + (l.mods ?? []).reduce((s, m) => s + m.price_cents, 0);
+
 export function priceOrder(lines, reward, discountPct) {
-  const subtotal = lines.reduce((s, l) => s + l.price_cents * l.qty, 0);
+  const subtotal = lines.reduce((s, l) => s + unitPrice(l) * l.qty, 0);
   let rewardOff = 0;
   if (reward) {
     const match = lines.filter((l) => l.category === reward.category_allowed);
     if (!match.length) throw new Error('reward_no_match');
-    rewardOff = Math.min(...match.map((l) => l.price_cents));
+    rewardOff = Math.min(...match.map((l) => l.price_cents)); // base price only: modifiers stay charged
   }
   const tierOff = Math.floor(((subtotal - rewardOff) * discountPct) / 100);
   const discount = rewardOff + tierOff;
@@ -57,4 +60,25 @@ export function nextChange(now = new Date()) {
     if (isOpenAt(t) !== open) return t;
   }
   return null;
+}
+
+// Checks the options a guest picked for one item against the item's modifier groups.
+// groups: [{ id, name, kind: 'one'|'many', required, options: [{ id, name, price_cents, is_default }] }]
+// Returns the chosen options in group order, with defaults filled in for required groups; throws on bad input.
+export function validateModifiers(groups, optionIds) {
+  if (new Set(optionIds).size !== optionIds.length) throw new Error('Option doppelt gewählt');
+  const known = new Map(groups.flatMap((g) => g.options.map((o) => [o.id, g])));
+  for (const id of optionIds) if (!known.has(id)) throw new Error('Option für diesen Artikel nicht verfügbar');
+  const chosen = [];
+  for (const g of groups) {
+    const picked = g.options.filter((o) => optionIds.includes(o.id));
+    if (g.kind === 'one' && picked.length > 1) throw new Error(`${g.name}: bitte nur eine Option wählen`);
+    if (!picked.length && g.required) {
+      const fallback = g.options.find((o) => o.is_default);
+      if (!fallback) throw new Error(`${g.name}: bitte eine Option wählen`);
+      picked.push(fallback);
+    }
+    chosen.push(...picked);
+  }
+  return chosen;
 }

@@ -1,5 +1,5 @@
 // Mitarbeiter-Dashboard: Bestellungen, Arbeitszeit, Finanzen, Speisekarte.
-import { api, euro, esc, toast, STATUS, session } from '../app.js';
+import { api, euro, esc, toast, STATUS, session, modBadges } from '../app.js';
 import { go } from '../router.js';
 
 const fmtTime = new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', weekday: 'short', hour: '2-digit', minute: '2-digit' });
@@ -39,7 +39,7 @@ export default {
           <div class="grow">
             <strong>${esc(o.customer)}</strong> <span class="muted">(${esc(o.member_id)})</span><br />
             <strong>${fmtTime.format(new Date(o.pickup_at))} Uhr</strong> ·
-            <span class="muted">${o.items.map((i) => `${i.qty}× ${esc(i.name)}`).join(', ')}</span>
+            <span class="muted">${o.items.map((i) => `${i.qty}× ${esc(i.name)} ${modBadges(i.modifiers)}`).join(' · ')}</span>
           </div>
           <strong>${euro(o.total_cents)}</strong>
           <span class="status ${o.status === 'ready' ? 'ready' : ''}">${STATUS[o.status]}</span>

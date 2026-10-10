@@ -1,5 +1,5 @@
 // Mein Konto: Willkommen, Übersicht, Bestellverlauf, Profil.
-import { api, euro, esc, cart, toast, STATUS, session, orderName, orderIsPlural, whenLabel } from '../app.js';
+import { api, euro, esc, cart, toast, STATUS, session, orderName, orderIsPlural, whenLabel, modBadges } from '../app.js';
 import { go } from '../router.js';
 
 const berlinHour = () => Number(new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', hour: 'numeric', hourCycle: 'h23' }).format(new Date()));
@@ -106,7 +106,7 @@ export default {
           <div class="detail">
             <p class="muted">Abholung ${whenLabel(o.pickup_at)}</p>
             <table>
-              ${o.items.map((i) => `<tr><td>${i.qty}× ${esc(i.name)}</td><td>${euro(i.unit_price_cents * i.qty)}</td></tr>`).join('')}
+              ${o.items.map((i) => `<tr><td>${i.qty}× ${esc(i.name)}<div class="mods">${modBadges(i.modifiers)}</div></td><td>${euro(i.unit_price_cents * i.qty)}</td></tr>`).join('')}
               <tr><td class="muted">Zwischensumme</td><td>${euro(o.subtotal_cents)}</td></tr>
               ${o.discount_cents ? `<tr><td class="muted">Rabatt${o.reward_id ? ' inkl. Prämie' : ''}</td><td>−${euro(o.discount_cents)}</td></tr>` : ''}
               <tr class="sum"><td>Gesamt (bezahlt bei Abholung)</td><td>${euro(o.total_cents)}</td></tr>
@@ -129,7 +129,7 @@ export default {
         } catch (err) { toast(err.message); }
       }
       if (reorder) {
-        for (const i of orders.find((o) => o.id === Number(reorder)).items) cart.add(i.menu_item_id, i.qty);
+        for (const i of orders.find((o) => o.id === Number(reorder)).items) cart.add(i.menu_item_id, i.qty, i.modifiers.map((m) => m.option_id).filter(Boolean));
         go('#/warenkorb');
       }
     });

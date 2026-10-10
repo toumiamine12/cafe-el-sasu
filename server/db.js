@@ -65,7 +65,47 @@ CREATE TABLE IF NOT EXISTS shifts (
   clock_in TEXT NOT NULL,
   clock_out TEXT
 );
+CREATE TABLE IF NOT EXISTS modifier_groups (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('one','many')),
+  required INTEGER NOT NULL DEFAULT 0,
+  sort INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS modifier_options (
+  id INTEGER PRIMARY KEY,
+  group_id INTEGER NOT NULL REFERENCES modifier_groups(id),
+  name TEXT NOT NULL,
+  price_cents INTEGER NOT NULL DEFAULT 0 CHECK (price_cents >= 0),
+  is_default INTEGER NOT NULL DEFAULT 0,
+  sort INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS menu_item_modifier_groups (
+  menu_item_id INTEGER NOT NULL REFERENCES menu_items(id) ON DELETE CASCADE,
+  group_id INTEGER NOT NULL REFERENCES modifier_groups(id),
+  PRIMARY KEY (menu_item_id, group_id)
+);
+CREATE TABLE IF NOT EXISTS order_item_modifiers (
+  id INTEGER PRIMARY KEY,
+  order_item_id INTEGER NOT NULL REFERENCES order_items(id),
+  option_id INTEGER REFERENCES modifier_options(id),
+  group_name TEXT NOT NULL,
+  name TEXT NOT NULL,
+  price_cents INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
 `;
+
+// Columns added after the first release; added in place on older database files.
+const LATER_COLUMNS = [
+  ['menu_items', 'sold_out', 'INTEGER NOT NULL DEFAULT 0'],
+  ['users', 'active', 'INTEGER NOT NULL DEFAULT 1'],
+  ['users', 'must_change_password', 'INTEGER NOT NULL DEFAULT 0'],
+];
+const DEFAULT_SETTINGS = { slot_capacity: () => process.env.SLOT_CAPACITY || '5', orders_paused: () => '0', extra_delay_min: () => '0' };
 
 export function hashPassword(pw) {
   const salt = randomBytes(16).toString('hex');
@@ -82,12 +122,18 @@ export function openDb(file = 'data/cafe.db') {
   if (file !== ':memory:') mkdirSync(dirname(file), { recursive: true });
   const db = new DatabaseSync(file);
   db.exec('PRAGMA foreign_keys = ON;' + SCHEMA);
+  for (const [table, col, def] of LATER_COLUMNS) {
+    if (!db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`);
+  }
+  const setting = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
+  for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) setting.run(key, value());
   if (!db.prepare('SELECT COUNT(*) n FROM menu_items').get().n) seed(db);
   return db;
 }
 
+// IMMEDIATE takes the write lock up front, so check-then-insert (e.g. slot capacity) can't race another writer.
 export function tx(db, fn) {
-  db.exec('BEGIN');
+  db.exec('BEGIN IMMEDIATE');
   try {
     const r = fn();
     db.exec('COMMIT');
