@@ -15,6 +15,12 @@ const fmtWeekday = new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin',
 const fmtDayTime = new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 const dayKey = (d) => d.toLocaleDateString('en-CA', { timeZone: 'Europe/Berlin' }); // YYYY-MM-DD in Berlin
 const timeRange = (p) => `${fmtClock.format(new Date(p.start))}–${fmtClock.format(new Date(p.end)).replace(/^00:00$/, '24:00')}`;
+// Calendar-day steps (not 24 h): a day is 23 or 25 hours when the clocks change.
+function addDays(d, n) {
+  const x = new Date(d);
+  x.setDate(x.getDate() + n);
+  return x;
+}
 function mondayOf(d) {
   const day = new Date(`${dayKey(d)}T00:00:00`);
   day.setDate(day.getDate() - ((day.getDay() + 6) % 7));
@@ -396,7 +402,7 @@ export default {
     let weekStart = mondayOf(new Date());
     let staffList = [];
     async function loadRota() {
-      const days = Array.from({ length: 7 }, (_, i) => new Date(weekStart.getTime() + i * 864e5));
+      const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
       $('rota-label').textContent = `KW ${isoWeek(weekStart)} · ${fmtShort.format(days[0])} – ${fmtShort.format(days[6])}`;
       const [plan, team] = await Promise.all([
         api(`/api/admin/rota?from=${dayKey(weekStart)}&days=7`).catch(fail($('rota-grid'))),
@@ -417,8 +423,8 @@ export default {
           return `<td class="${dayKey(d) === today ? 'today' : ''}">${mine.map((p) => `<div class="chip">${timeRange(p)}${p.note ? `<small>${esc(p.note)}</small>` : ''}${isAdmin ? `<button type="button" data-unplan="${p.id}" aria-label="Schicht entfernen">×</button>` : ''}</div>`).join('')}</td>`;
         }).join('')}</tr>`).join('') || `<tr><td colspan="8" class="muted">In dieser Woche ist noch nichts geplant.</td></tr>`}</tbody>`;
     }
-    $('rota-prev').addEventListener('click', () => { weekStart = new Date(weekStart.getTime() - 7 * 864e5); loadRota(); });
-    $('rota-next').addEventListener('click', () => { weekStart = new Date(weekStart.getTime() + 7 * 864e5); loadRota(); });
+    $('rota-prev').addEventListener('click', () => { weekStart = addDays(weekStart, -7); loadRota(); });
+    $('rota-next').addEventListener('click', () => { weekStart = addDays(weekStart, 7); loadRota(); });
     $('rota-grid').addEventListener('click', async (e) => {
       const id = e.target.dataset.unplan;
       if (!id) return;

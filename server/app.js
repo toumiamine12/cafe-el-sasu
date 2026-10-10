@@ -670,7 +670,12 @@ export function createApp(db) {
   const fmtDay = new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', day: '2-digit', month: '2-digit', year: 'numeric' });
   const fmtTime = new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', hour: '2-digit', minute: '2-digit' });
   const de = (n, digits = 2) => n.toFixed(digits).replace('.', ','); // German decimal comma
-  const csvCell = (v) => (/[;"\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v));
+  // Text that starts like a formula (= + - @) gets a leading ' so Excel shows it instead of running it.
+  const csvCell = (v) => {
+    let t = String(v);
+    if (/^[=+\-@\t\r]/.test(t)) t = `'${t}`;
+    return /[;"\r\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+  };
 
   app.get('/api/admin/payroll.csv', admin, (req, res) => {
     const month = String(req.query.month ?? '');
@@ -679,10 +684,11 @@ export function createApp(db) {
     const from = new Date(Date.UTC(y, m - 1, 1)).toISOString();
     const to = new Date(Date.UTC(y, m, 1)).toISOString();
     const shifts = q(`SELECT s.id, s.user_id, u.name, u.member_id, u.hourly_wage, s.clock_in, s.clock_out FROM shifts s JOIN users u ON u.id = s.user_id
-      WHERE s.clock_in >= ? AND s.clock_in < ? AND s.clock_out IS NOT NULL ORDER BY u.name, s.clock_in`).all(from, to).map((sh) => shiftDetail(sh));
+      WHERE s.clock_in >= ? AND s.clock_in < ? AND s.clock_out IS NOT NULL ORDER BY u.name, u.id, s.clock_in`).all(from, to).map((sh) => shiftDetail(sh));
     const rows = [['Name', 'Mitgliedsnr', 'Datum', 'Beginn', 'Ende', 'Pause (min)', 'Netto-Stunden', 'Stundenlohn', 'Lohn']];
-    for (const name of [...new Set(shifts.map((sh) => sh.name))]) {
-      const mine = shifts.filter((sh) => sh.name === name);
+    for (const userId of [...new Set(shifts.map((sh) => sh.user_id))]) { // per person, not per name: names can repeat
+      const mine = shifts.filter((sh) => sh.user_id === userId);
+      const { name } = mine[0];
       for (const sh of mine) {
         rows.push([sh.name, sh.member_id, fmtDay.format(new Date(sh.clock_in)), fmtTime.format(new Date(sh.clock_in)), fmtTime.format(new Date(sh.clock_out)),
           sh.break_minutes, de(sh.net_minutes / 60), de(sh.hourly_wage / 100), de(sh.pay_cents / 100)]);

