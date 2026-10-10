@@ -19,6 +19,7 @@ export default {
     const user = await session.get();
     if (!alive()) return;
     if (user) {
+      $('auth-hello').textContent = `Hallo, ${user.name.split(' ')[0]}`;
       $('login-panel').hidden = true;
       $('logged-in').hidden = false;
       $('logged-in-as').innerHTML = `Eingeloggt als <strong>${esc(user.name)}</strong> (${ROLE_LABEL[user.role]}, ${esc(user.member_id)}).`;
@@ -31,13 +32,29 @@ export default {
       return;
     }
 
-    $('toggle').addEventListener('click', () => {
-      registering = !registering;
-      $('register-fields').hidden = !registering;
-      $('login-fields').hidden = registering;
-      $('form-title').textContent = $('submit').textContent = registering ? 'Mitglied werden' : 'Einloggen';
-      $('toggle').textContent = registering ? 'Schon Mitglied? Einloggen' : 'Noch kein Mitglied? Jetzt registrieren';
-      $('password').autocomplete = registering ? 'new-password' : 'current-password';
+    function setMode(register) {
+      registering = register;
+      $('mode-login').setAttribute('aria-selected', !register);
+      $('mode-register').setAttribute('aria-selected', register);
+      $('register-fields').hidden = !register;
+      $('login-fields').hidden = register;
+      $('form-title').textContent = $('submit').textContent = register ? 'Mitglied werden' : 'Einloggen';
+      $('form-sub').textContent = register
+        ? 'Kostenlos, in einer Minute erledigt. Deine Mitgliedsnummer bekommst du sofort.'
+        : 'Mit Mitgliedsnummer oder E-Mail – für Gäste, Personal und Admin.';
+      $('auth-hello').textContent = register ? 'Schön, dich kennenzulernen' : 'Willkommen zurück';
+      $('password').autocomplete = register ? 'new-password' : 'current-password';
+      $('error').textContent = '';
+      $(register ? 'name' : 'id').focus();
+    }
+    $('mode-login').addEventListener('click', () => setMode(false));
+    $('mode-register').addEventListener('click', () => setMode(true));
+
+    $('pw-eye').addEventListener('click', () => {
+      const show = $('password').type === 'password';
+      $('password').type = show ? 'text' : 'password';
+      $('pw-eye').setAttribute('aria-pressed', show);
+      $('pw-eye').setAttribute('aria-label', show ? 'Passwort verbergen' : 'Passwort anzeigen');
     });
 
     $('auth-form').addEventListener('submit', async (e) => {

@@ -64,7 +64,7 @@ const REWARDS = [
 
 // [member_id, name, email, password, role, wage, lifetime_points, points, birthday]
 const USERS = [
-  ['SASU-1000', 'Görkem Sari', 'admin@cafe-elsasu.de', 'admin123', 'admin', 0, 0, 0, null],
+  ['SASU-1000', 'Leyla Aksoy', 'admin@cafe-elsasu.de', 'admin123', 'admin', 0, 0, 0, null],
   ['SASU-1001', 'Lena Becker', 'lena@cafe-elsasu.de', 'staff123', 'staff', 1400, 0, 0, null],
   ['SASU-1002', 'Yusuf Demir', 'yusuf@cafe-elsasu.de', 'staff123', 'staff', 1400, 0, 0, null],
   ['SASU-1003', 'Anna Schmidt', 'anna@example.com', 'demo123', 'customer', 0, 80, 80, '1998-03-14'],

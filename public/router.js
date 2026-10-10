@@ -55,5 +55,6 @@ async function render() {
 }
 
 addEventListener('hashchange', render);
+addEventListener('sessionchange', render); // e.g. logout from the navbar while on the Startseite
 session.get().then(renderNav);
 render();

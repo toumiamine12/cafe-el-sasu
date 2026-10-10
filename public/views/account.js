@@ -1,8 +1,7 @@
 // Mein Konto: Willkommen, Übersicht, Bestellverlauf, Profil.
-import { api, euro, esc, cart, toast, STATUS, session } from '../app.js';
+import { api, euro, esc, cart, toast, STATUS, session, orderName, orderIsPlural, whenLabel } from '../app.js';
 import { go } from '../router.js';
 
-const fmtDate = new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', dateStyle: 'medium', timeStyle: 'short' });
 const berlinHour = () => Number(new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', hour: 'numeric', hourCycle: 'h23' }).format(new Date()));
 const ACTIVE = ['new', 'preparing', 'ready'];
 const TIER_MIN = { Bronze: 0, Silver: 200, Gold: 500 };
@@ -38,9 +37,10 @@ export default {
       $('greeting').textContent = `${hello}, ${first}`;
       const active = orders.filter((o) => ACTIVE.includes(o.status));
       const ready = active.find((o) => o.status === 'ready');
-      $('welcome-sub').textContent = ready ? `Deine Bestellung #${ready.id} ist abholbereit.`
-        : active.length ? `${active.length === 1 ? 'Eine Bestellung ist' : `${active.length} Bestellungen sind`} in Arbeit.`
-          : 'Lust auf einen Kaffee? Bestell vor und hol ihn ohne Warten ab.';
+      $('welcome-sub').textContent = ready ? `${orderName(ready)} ${orderIsPlural(ready) ? 'sind' : 'ist'} abholbereit – bis gleich!`
+        : active.length === 1 ? `Wir bereiten ${orderName(active[0])} für ${whenLabel(active[0].pickup_at)} vor.`
+          : active.length ? `${active.length} Bestellungen sind in Arbeit.`
+            : 'Lust auf einen Kaffee? Bestell vor und hol ihn ohne Warten ab.';
 
       const t = user.tier;
       const pct = t.next ? Math.round(((user.lifetime_points - TIER_MIN[t.name]) / (t.next - TIER_MIN[t.name])) * 100) : 100;
@@ -60,9 +60,16 @@ export default {
 
     // --- overview -------------------------------------------------------------------
     function renderOverview(rewards) {
-      const stat = (label, value) => `<div class="stat"><div class="label">${label}</div><div class="value">${value}</div></div>`;
-      $('stats').innerHTML = stat('Abgeholte Bestellungen', user.stats.orders) + stat('Insgesamt ausgegeben', euro(user.stats.spent_cents))
-        + stat('Dein Favorit', user.stats.favorite ? esc(user.stats.favorite) : '—');
+      const stat = (label, value, hint) => `<div class="stat"><div class="label">${label}</div><div class="value">${value}</div><div class="hint">${hint}</div></div>`;
+      // Only feel-good numbers: what they saved and enjoyed, never what they spent.
+      const nextReward = rewards.filter((r) => !r.birthday_only && r.cost_points > user.points).sort((a, b) => a.cost_points - b.cost_points)[0];
+      const treats = user.stats.rewards_redeemed;
+      $('stats').innerHTML =
+        stat('Gespart', euro(user.stats.saved_cents), user.stats.saved_cents ? 'mit Rabatten und Prämien' : 'ab Silver gibt\'s Rabatt')
+        + stat('Gratis genossen', treats, treats === 1 ? 'Leckerei auf uns' : 'Leckereien auf uns')
+        + stat('Dein Favorit', user.stats.favorite ? esc(user.stats.favorite) : '—', user.stats.favorite ? 'am häufigsten bestellt' : 'noch nichts bestellt')
+        + stat('Nächste Prämie', nextReward ? esc(nextReward.name) : 'Alles einlösbar',
+          nextReward ? `noch ${nextReward.cost_points - user.points} Punkte` : 'such dir eine Prämie aus');
 
       $('rewards').innerHTML = rewards.map((r) => {
         const pct = r.cost_points ? Math.min(100, Math.round((user.points / r.cost_points) * 100)) : 100;
@@ -78,8 +85,8 @@ export default {
       $('active-panel').hidden = !active.length;
       $('active-orders').innerHTML = active.map((o) => `
         <div class="row-line">
-          <div class="grow"><strong>#${o.id}</strong> · Abholung ${fmtDate.format(new Date(o.pickup_at))}<br />
-            <span class="muted">${o.items.map((i) => `${i.qty}× ${esc(i.name)}`).join(', ')}</span></div>
+          <div class="grow"><strong>${esc(orderName(o))}</strong><br />
+            <span class="muted">Abholung ${whenLabel(o.pickup_at)}</span></div>
           <span class="status ${o.status === 'ready' ? 'ready' : ''}">${STATUS[o.status]}</span>
         </div>`).join('');
     }
@@ -90,13 +97,13 @@ export default {
       $('order-list').innerHTML = orders.length ? orders.map((o) => `
         <details class="order" data-id="${o.id}" ${open.has(String(o.id)) ? 'open' : ''}>
           <summary>
-            <div><strong>${fmtDate.format(new Date(o.created_at))}</strong> <span class="muted">· #${o.id}</span><br />
-              <span class="muted">${o.items.map((i) => `${i.qty}× ${esc(i.name)}`).join(', ')}</span></div>
+            <div><strong>${esc(orderName(o))}</strong><br />
+              <span class="muted">Bestellt ${whenLabel(o.created_at)}</span></div>
             <span class="status ${o.status === 'ready' ? 'ready' : o.status === 'cancelled' ? 'cancelled' : ''}">${STATUS[o.status]}</span>
             <strong>${euro(o.total_cents)}</strong>
           </summary>
           <div class="detail">
-            <p class="muted">Abholung: ${fmtDate.format(new Date(o.pickup_at))}</p>
+            <p class="muted">Abholung ${whenLabel(o.pickup_at)}</p>
             <table>
               ${o.items.map((i) => `<tr><td>${i.qty}× ${esc(i.name)}</td><td>${euro(i.unit_price_cents * i.qty)}</td></tr>`).join('')}
               <tr><td class="muted">Zwischensumme</td><td>${euro(o.subtotal_cents)}</td></tr>
@@ -183,7 +190,7 @@ export default {
       user = me;
       orders = list;
       for (const o of orders) {
-        if (lastStatus[o.id] && lastStatus[o.id] !== 'ready' && o.status === 'ready') toast(`Bestellung #${o.id} ist abholbereit`);
+        if (lastStatus[o.id] && lastStatus[o.id] !== 'ready' && o.status === 'ready') toast(`${orderName(o)} ${orderIsPlural(o) ? 'sind' : 'ist'} abholbereit`);
         lastStatus[o.id] = o.status;
       }
       renderWelcome();
@@ -197,7 +204,7 @@ export default {
     await refresh();
     if (!alive()) return;
     fillProfile();
-    if (params.get('placed')) toast(`Danke! Bestellung #${params.get('placed')} ist eingegangen.`);
+    if (params.has('placed') && orders[0]) toast(`Danke! ${orderName(orders[0])} – Abholung ${whenLabel(orders[0].pickup_at)}.`);
     if (params.get('welcome')) toast(`Willkommen! Deine Mitgliedsnummer: ${params.get('welcome')}`);
   },
   unmount() {

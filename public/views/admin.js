@@ -37,7 +37,7 @@ export default {
       $('open-orders').innerHTML = orders.length ? orders.map((o) => `
         <div class="row-line" style="flex-wrap:wrap">
           <div class="grow">
-            <strong>#${o.id}</strong> · ${esc(o.customer)} <span class="muted">(${esc(o.member_id)})</span><br />
+            <strong>${esc(o.customer)}</strong> <span class="muted">(${esc(o.member_id)})</span><br />
             <strong>${fmtTime.format(new Date(o.pickup_at))} Uhr</strong> ·
             <span class="muted">${o.items.map((i) => `${i.qty}× ${esc(i.name)}`).join(', ')}</span>
           </div>

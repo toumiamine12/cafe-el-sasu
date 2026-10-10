@@ -52,7 +52,7 @@ export default {
         } });
         cart.set([]);
         await session.refresh(); // points may have been spent on a reward
-        go(`#/konto?placed=${order.id}`);
+        go('#/konto?placed=1'); // the account page thanks for the newest order
       } catch (err) {
         $('error').textContent = err.message;
         $('place').disabled = false;
