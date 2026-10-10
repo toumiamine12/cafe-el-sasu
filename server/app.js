@@ -128,6 +128,8 @@ export function createApp(db) {
 
   const requireRole = (...roles) => (req, res, next) => {
     if (!req.user) return res.status(401).json({ error: 'Bitte einloggen' });
+    // A temporary password (set by the owner) unlocks nothing until the employee chooses their own.
+    if (req.user.must_change_password) return res.status(403).json({ error: 'Bitte zuerst dein eigenes Passwort festlegen' });
     if (roles.length && !roles.includes(req.user.role)) return res.status(403).json({ error: 'Kein Zugriff' });
     next();
   };
@@ -205,7 +207,9 @@ export function createApp(db) {
     } catch (e) { next(e); }
   });
 
-  app.post('/api/me/password', loggedIn, (req, res) => {
+  // Not behind requireRole: this is the one thing a temporary-password account may do.
+  const anyLogin = (req, res, next) => (req.user ? next() : res.status(401).json({ error: 'Bitte einloggen' }));
+  app.post('/api/me/password', anyLogin, (req, res) => {
     const { current, next } = req.body;
     if (typeof current !== 'string' || !verifyPassword(current, req.user.password_hash)) fail(401, 'Aktuelles Passwort ist falsch');
     checkPassword(next);

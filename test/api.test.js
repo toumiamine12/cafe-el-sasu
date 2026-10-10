@@ -700,3 +700,17 @@ test('staff look up a member by QR code / member ID', async () => {
 test('camera may be used by our own page for the QR scanner', async () => {
   assert.match((await fetch(base + '/')).headers.get('permissions-policy'), /camera=\(self\)/);
 });
+
+test('until the temporary password is changed, only the password change works', async () => {
+  const admin = await login('SASU-1000', 'admin123');
+  await admin('POST', '/api/admin/staff', { name: 'Neu Ling', email: 'neu@cafe-elsasu.de', password: 'Temporaer1', hourly_wage: 1300 });
+  const neu = await login('neu@cafe-elsasu.de', 'Temporaer1');
+  assert.equal((await neu('GET', '/api/me')).status, 200);
+  for (const [m, path] of [['GET', '/api/admin/orders'], ['POST', '/api/admin/shifts/clock'], ['GET', '/api/admin/settings']]) {
+    const r = await neu(m, path);
+    assert.equal(r.status, 403, path);
+    assert.match(r.body.error, /Passwort/);
+  }
+  assert.equal((await neu('POST', '/api/me/password', { current: 'Temporaer1', next: 'EigenesPasswort1' })).status, 200);
+  assert.equal((await neu('GET', '/api/admin/orders')).status, 200);
+});

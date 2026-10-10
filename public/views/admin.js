@@ -135,10 +135,17 @@ export default {
 
     // Camera scan with the browser's own BarcodeDetector (Chrome/Edge); elsewhere the input field is used.
     if ('BarcodeDetector' in window && navigator.mediaDevices?.getUserMedia) $('scan-btn').hidden = false;
+    let starting = false;
     $('scan-btn').addEventListener('click', async () => {
+      if (starting || stream) return; // one camera at a time (double taps)
+      starting = true;
+      $('scan-btn').disabled = true;
+      let s;
       try {
         const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        if (!alive()) { s.getTracks().forEach((t) => t.stop()); return; } // left the page while the camera started
+        stream = s;
         $('scan-video').srcObject = stream;
         await $('scan-video').play();
         $('scan-dialog').showModal();
@@ -153,8 +160,12 @@ export default {
         };
         tick();
       } catch {
+        s?.getTracks().forEach((t) => t.stop());
         stopCamera();
-        toast('Kamera nicht verfügbar – bitte Nummer eingeben');
+        if (alive()) toast('Kamera nicht verfügbar – bitte Nummer eingeben');
+      } finally {
+        starting = false;
+        if (alive()) $('scan-btn').disabled = false;
       }
     });
     $('scan-close').addEventListener('click', () => { stopCamera(); $('scan-dialog').close(); });

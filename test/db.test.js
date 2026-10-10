@@ -1,6 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openDb, verifyPassword } from '../server/db.js';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 process.env.ADMIN_PASSWORD = 'admin123';
 process.env.STAFF_PASSWORD = 'staff123';
@@ -34,5 +37,24 @@ test('without env passwords, staff/admin get random ones, not admin123', () => {
   } finally {
     console.log = log;
     [process.env.ADMIN_PASSWORD, process.env.STAFF_PASSWORD] = saved;
+  }
+});
+
+test('an older database without item options gets them on start', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'cafe-'));
+  const file = join(dir, 'cafe.db');
+  try {
+    const old = openDb(file);
+    // simulate a file created before item options existed
+    old.exec('DELETE FROM menu_item_modifier_groups; DELETE FROM order_item_modifiers; DELETE FROM modifier_options; DELETE FROM modifier_groups;');
+    old.close();
+    const db = openDb(file);
+    assert.ok(db.prepare('SELECT COUNT(*) n FROM modifier_groups').get().n >= 4);
+    const flat = db.prepare(`SELECT GROUP_CONCAT(g.name) names FROM menu_item_modifier_groups l
+      JOIN modifier_groups g ON g.id = l.group_id JOIN menu_items m ON m.id = l.menu_item_id WHERE m.name = 'Flat White'`).get();
+    assert.match(flat.names, /Milch/);
+    db.close();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 });

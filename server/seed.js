@@ -97,6 +97,21 @@ const daysAgo = (d, hour) => {
   return t.toISOString();
 };
 
+// Item options (milk, syrup, extra shot, ice) and which menu items offer them.
+// Also run on databases created before item options existed (see openDb).
+export function seedModifiers(db) {
+  const groupId = {};
+  MODIFIERS.forEach(([name, kind, required, options], gi) => {
+    groupId[name] = db.prepare('INSERT INTO modifier_groups (name, kind, required, sort) VALUES (?, ?, ?, ?)').run(name, kind, required, gi).lastInsertRowid;
+    options.forEach(([o, price, def], oi) => db.prepare('INSERT INTO modifier_options (group_id, name, price_cents, is_default, sort) VALUES (?, ?, ?, ?, ?)')
+      .run(groupId[name], o, price, def, oi));
+  });
+  const link = db.prepare('INSERT OR IGNORE INTO menu_item_modifier_groups (menu_item_id, group_id) VALUES (?, ?)');
+  for (const { id, category, tags } of db.prepare('SELECT id, category, tags FROM menu_items').all()) {
+    for (const g of groupsFor(category, tags)) link.run(id, groupId[g]);
+  }
+}
+
 // Staff/admin passwords are never in the code: take them from the environment,
 // or generate random ones and print them once on first start.
 function secret(envName, label, ids) {
@@ -109,18 +124,9 @@ function secret(envName, label, ids) {
 export function seed(db) {
   const pw = { ADMIN: secret('ADMIN_PASSWORD', 'Admin', 'SASU-1000'), STAFF: secret('STAFF_PASSWORD', 'Personal', 'SASU-1001, SASU-1002') };
   tx(db, () => {
-    const groupId = {};
-    MODIFIERS.forEach(([name, kind, required, options], gi) => {
-      groupId[name] = db.prepare('INSERT INTO modifier_groups (name, kind, required, sort) VALUES (?, ?, ?, ?)').run(name, kind, required, gi).lastInsertRowid;
-      options.forEach(([o, price, def], oi) => db.prepare('INSERT INTO modifier_options (group_id, name, price_cents, is_default, sort) VALUES (?, ?, ?, ?, ?)')
-        .run(groupId[name], o, price, def, oi));
-    });
     const m = db.prepare('INSERT INTO menu_items (name, description, category, price_cents, photo, tags) VALUES (?, ?, ?, ?, ?, ?)');
-    const link = db.prepare('INSERT INTO menu_item_modifier_groups (menu_item_id, group_id) VALUES (?, ?)');
-    for (const [n, d, c, p, photo, tags] of MENU) {
-      const { lastInsertRowid } = m.run(n, d, c, p, `photos/${photo}`, tags);
-      for (const g of groupsFor(c, tags)) link.run(lastInsertRowid, groupId[g]);
-    }
+    for (const [n, d, c, p, photo, tags] of MENU) m.run(n, d, c, p, `photos/${photo}`, tags);
+    seedModifiers(db);
 
     const r = db.prepare('INSERT INTO rewards (name, cost_points, category_allowed, birthday_only) VALUES (?, ?, ?, ?)');
     for (const row of REWARDS) r.run(...row);
