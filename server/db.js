@@ -2,7 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { scryptSync, randomBytes, timingSafeEqual } from 'node:crypto';
-import { seed, seedModifiers } from './seed.js';
+import { seed, seedModifiers, tagPlantMilk } from './seed.js';
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS users (
@@ -183,6 +183,7 @@ export function openDb(file = 'data/cafe.db') {
   for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) setting.run(key, value());
   if (!db.prepare('SELECT COUNT(*) n FROM menu_items').get().n) seed(db);
   else if (!db.prepare('SELECT COUNT(*) n FROM modifier_groups').get().n) tx(db, () => seedModifiers(db)); // older file: add item options
+  if (!db.prepare("SELECT 1 FROM menu_items WHERE (',' || tags || ',') LIKE '%,plant,%'").get()) tx(db, () => tagPlantMilk(db)); // older file: vegan-with-plant-milk tags
   return db;
 }
 

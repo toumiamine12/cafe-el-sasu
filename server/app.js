@@ -684,7 +684,7 @@ export function createApp(db) {
     res.json({ revenue, wages, profit: revenue - wages, orders, top });
   });
 
-  const TAGS = ['vegan', 'gluten', 'nuts', 'lactose'];
+  const TAGS = ['vegan', 'plant', 'gluten', 'nuts', 'lactose']; // plant = vegan with oat/almond milk
   // A photo is a local file under photos/ or an https URL; nothing else reaches an <img src>.
   const isPhoto = (v) => typeof v === 'string' && v.length <= 500 && (
     /^photos\/[\w-]+(\/[\w-]+)*\.(jpe?g|png|webp|gif)$/i.test(v)

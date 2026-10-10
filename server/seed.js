@@ -56,6 +56,14 @@ const MENU = [
   ['Churros', 'Frittiertes Spritzgebäck mit Zimtzucker und Schokodip', 'pastry', 499, 'menu/churros.jpg', 'gluten,lactose'],
 ];
 
+// Drinks that become vegan with oat or almond milk (no cream, ice cream, chocolate or condensed milk in them).
+export const PLANT_MILK_OK = ['Cappuccino', 'Macchiato', 'Flat White', 'Caramel Latte', 'Chai Latte', 'Cortado', 'Matcha Kaffee',
+  'Dalgona Kaffee', 'Iced Favorites', 'Iced Caramel Macchiato'];
+export function tagPlantMilk(db) {
+  const tag = db.prepare("UPDATE menu_items SET tags = CASE WHEN tags = '' THEN 'plant' ELSE tags || ',plant' END WHERE name = ? AND (',' || tags || ',') NOT LIKE '%,plant,%'");
+  for (const name of PLANT_MILK_OK) tag.run(name);
+}
+
 // Modifier groups: [name, kind, required, [[option, price_cents, is_default], …]]
 const MODIFIERS = [
   ['Milch', 'one', 1, [['Vollmilch', 0, 1], ['Hafermilch', 50, 0], ['Mandelmilch', 50, 0], ['Laktosefrei', 30, 0]]],
@@ -141,6 +149,7 @@ export function seed(db) {
     const m = db.prepare('INSERT INTO menu_items (name, description, category, price_cents, photo, tags) VALUES (?, ?, ?, ?, ?, ?)');
     for (const [n, d, c, p, photo, tags] of MENU) m.run(n, d, c, p, `photos/${photo}`, tags);
     seedModifiers(db);
+    tagPlantMilk(db);
 
     const r = db.prepare('INSERT INTO rewards (name, cost_points, category_allowed, birthday_only) VALUES (?, ?, ?, ?)');
     for (const row of REWARDS) r.run(...row);

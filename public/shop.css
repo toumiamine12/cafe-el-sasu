@@ -219,7 +219,7 @@ body { font-family: var(--text); color: var(--espresso); min-height: 100vh; disp
 
 /* --- tags & status --- */
 .tag { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 999px; background: #f1e4d3; color: var(--muted); margin: 2px 4px 0 0; }
-.tag.vegan { background: var(--ok-bg); color: var(--ok); }
+.tag.vegan, .tag.plant { background: var(--ok-bg); color: var(--ok); }
 .status { font-weight: 700; font-size: 13px; padding: 3px 10px; border-radius: 999px; background: #f1e4d3; white-space: nowrap; }
 .status.ready { background: var(--ok-bg); color: var(--ok); }
 .status.cancelled { color: var(--muted); text-decoration: line-through; }

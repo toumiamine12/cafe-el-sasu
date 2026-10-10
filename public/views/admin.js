@@ -8,7 +8,7 @@ const NEXT = { new: 'preparing', preparing: 'ready', ready: 'picked_up' };
 const NEXT_LABEL = { new: 'Zubereiten', preparing: 'Fertig', ready: 'Abgeholt' };
 const STATE_LABEL = { new: 'Neu', preparing: 'In Arbeit', ready: 'Abholbereit' };
 const CATEGORY = { coffee: 'Kaffee', cold: 'Kalt', cake: 'Kuchen', pastry: 'Gebäck' };
-const TAG_LABEL = { vegan: 'vegan', gluten: 'Gluten', nuts: 'Nüsse', lactose: 'Laktose' };
+const TAG_LABEL = { vegan: 'vegan', plant: 'vegan mit Pflanzenmilch', gluten: 'Gluten', nuts: 'Nüsse', lactose: 'Laktose' };
 const hours = (h) => h.toFixed(1).replace('.', ',') + ' h';
 const fmtShort = new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', day: '2-digit', month: '2-digit' });
 const fmtWeekday = new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', weekday: 'short' });

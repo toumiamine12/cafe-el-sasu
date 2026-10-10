@@ -1022,3 +1022,20 @@ test('no birthday treat for brand-new accounts or a freshly changed birthday', a
   assert.ok(!(await c('GET', '/api/rewards')).body.some((r) => r.birthday_only));
 });
 
+
+// --- vegan filter data --------------------------------------------------------------
+
+test('only drinks without other dairy are marked "vegan with plant milk"', async () => {
+  const menu = (await client()('GET', '/api/menu')).body;
+  const tags = (name) => menu.find((i) => i.name === name).tags.split(',');
+  for (const ok of ['Flat White', 'Cappuccino', 'Cortado', 'Chai Latte']) assert.ok(tags(ok).includes('plant'), ok);
+  for (const no of ['Affogato', 'Irischer Kaffee', 'Wiener Melange', 'Eisschokolade', 'Spanish Latte', 'Heiße Schokolade', 'Cheesecake']) {
+    assert.ok(!tags(no).includes('plant') && !tags(no).includes('vegan'), no);
+  }
+});
+
+test('owner can set the plant-milk tag', async () => {
+  const admin = await login('SASU-1000', 'admin123');
+  const id = itemByName('Mokka Kaffee').id;
+  assert.equal((await admin('PATCH', `/api/admin/menu/${id}`, { tags: 'lactose,plant' })).status, 200);
+});

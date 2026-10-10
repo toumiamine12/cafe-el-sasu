@@ -7,14 +7,13 @@ const CATEGORIES = [
   ['cake', 'Kuchen', 'Hausgemacht, jeden Morgen frisch'],
   ['pastry', 'Gebäck', 'Süßes zum Mitnehmen'],
 ];
-const TAG_LABELS = { vegan: 'vegan', gluten: 'Gluten', nuts: 'Nüsse', lactose: 'Laktose' };
+const TAG_LABELS = { vegan: 'vegan', plant: 'vegan mit Pflanzenmilch', gluten: 'Gluten', nuts: 'Nüsse', lactose: 'Laktose' };
 const tags = (i) => i.tags.split(',').filter(Boolean)
   .map((t) => `<span class="tag ${esc(t)}">${esc(TAG_LABELS[t] || t)}</span>`).join('');
 
 let spy = null;
-// Vegan view: tagged vegan, or a drink that can be made with plant milk.
-const PLANT = ['Hafermilch', 'Mandelmilch'];
-const veganOk = (i) => i.tags.split(',').includes('vegan') || i.modifiers.some((g) => g.name === 'Milch' && g.options.some((o) => PLANT.includes(o.name)));
+// Vegan view: items tagged vegan, or drinks tagged "plant" (vegan with oat/almond milk — no cream, ice cream etc.).
+const veganOk = (i) => i.tags.split(',').some((t) => t === 'vegan' || t === 'plant');
 
 export default {
   title: 'Speisekarte',
