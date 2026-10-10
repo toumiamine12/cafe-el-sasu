@@ -11,7 +11,6 @@
 
 ![Startseite](docs/screenshots/home.png)
 
-> The interface is in German (formal *Sie*), like the café itself. This README is in English.
 
 ---
 
