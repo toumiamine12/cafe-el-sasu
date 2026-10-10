@@ -168,6 +168,7 @@ const LATER_COLUMNS = [
   ['users', 'preferences', "TEXT NOT NULL DEFAULT '{}'"],
   ['users', 'birthday_changed_at', 'TEXT'],
   ['users', 'username', 'TEXT'],
+  ['users', 'walk_in', 'INTEGER NOT NULL DEFAULT 0'],
   ['orders', 'gift_id', 'INTEGER REFERENCES gifts(id)'],
 ];
 const DEFAULT_SETTINGS = { slot_capacity: () => process.env.SLOT_CAPACITY || '5', orders_paused: () => '0', extra_delay_min: () => '0' };
@@ -212,6 +213,8 @@ export function openDb(file = 'data/cafe.db') {
   if (!db.prepare("SELECT 1 FROM menu_items WHERE (',' || tags || ',') LIKE '%,plant,%'").get()) tx(db, () => tagPlantMilk(db)); // older file: vegan-with-plant-milk tags
   // older file: give every account a username
   for (const u of db.prepare('SELECT id, name FROM users WHERE username IS NULL').all()) db.prepare('UPDATE users SET username = ? WHERE id = ?').run(newUsername(db, u.name), u.id);
+  // the seeded counter account (no usable password) books orders taken at the Theke
+  db.exec("UPDATE users SET walk_in = 1 WHERE member_id = 'SASU-1006' AND password_hash = 'x:x'");
   return db;
 }
 

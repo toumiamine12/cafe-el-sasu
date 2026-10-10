@@ -224,3 +224,8 @@ test('businessInsights turns numbers into tips', () => {
   assert.match(text, /Samstag/);
   assert.ok(tips.every((t) => ['good', 'warn', 'info'].includes(t.tone)));
 });
+
+test('usernameBase never yields something that reads as a member ID (SASU-1234)', () => {
+  for (const n of ['SASU-', 'sasu -', 'Sasu-']) assert.ok(!/^sasu-?$/.test(usernameBase(n)), n);
+  assert.equal(usernameBase('Sasu Becker'), 'sasu.becker');
+});

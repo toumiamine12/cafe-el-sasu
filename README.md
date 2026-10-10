@@ -73,6 +73,7 @@ Built with **Node.js, Express and SQLite** (`node:sqlite`). The frontend is plai
   - VAT estimate (7 % food and beans, 19 % drinks), rules-based tips (staffing for the rush, wage share, plant milk stock, slow sellers)
   - Bericht exportieren: CSV for Excel with totals, VAT, wages, result and one row per day; Drucken / PDF via a print layout
   - Money is integer cents end to end; wage cost = net shift minutes × hourly wage (`GET /api/admin/analytics`, `GET /api/admin/report.csv`)
+  - Bean-subscription revenue counts from each pickup marked "übergeben". Databases created before this version never recorded pickups, so their earlier bean sales can't be reconstructed (skips moved the same date) and are missing from history
 - Admin only: full menu editor (name, description, category, price, allergen tags, photo path or https URL), hide/show, delete (never-ordered items are removed, ordered ones hidden)
 - Admin only: staff management — create staff with a temporary password (changed at first login), set hourly wages, deactivate accounts (signs them out, ends a running shift)
 - Admin only: shift table with clock-in/out, hours and wage cost per shift and per employee
@@ -100,7 +101,7 @@ Needs Node.js 22.13 or newer.
 ```bash
 npm install
 npm start          # http://localhost:3000
-npm test           # 119 API + rules tests
+npm test           # 122 API + rules tests
 ```
 
 The database (`data/cafe.db`) is created and filled with demo data on first start. Delete `data/` to reset.

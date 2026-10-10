@@ -168,7 +168,8 @@ const FOLD = { ä: 'ae', ö: 'oe', ü: 'ue', ß: 'ss', ı: 'i', ş: 's', ç: 'c'
 export function usernameBase(name) {
   const base = String(name).toLowerCase().replace(/[^\x00-\x7f]/g, (c) => FOLD[c] ?? '')
     .trim().split(/\s+/).map((w) => w.replace(/[^a-z0-9-]/g, '')).filter(Boolean).join('.');
-  return base || 'gast';
+  // 'sasu-' + digits would read as a member ID at login
+  return base && !/^sasu-*$/.test(base) ? base : 'gast';
 }
 
 // --- VAT (Germany, takeaway): 7 % food, 19 % drinks; amounts are gross (VAT included) --------

@@ -888,7 +888,6 @@ export function createApp(db) {
   const CAT_LABEL = { coffee: 'Kaffee', cold: 'Kaltgetränke', cake: 'Kuchen', pastry: 'Gebäck', beans: 'Kaffeebohnen' };
   const FOOD = new Set(['cake', 'pastry', 'beans']); // 7 % VAT; drinks 19 %
   const WEEKDAY = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
-  const WALKIN_EMAIL = 'gast@cafe-elsasu.de';
   // Cached formatters: toLocaleString with a timeZone builds a new one per call (seconds for a month of orders).
   const HOUR_FMT = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Berlin', hour: 'numeric', hourCycle: 'h23' });
   const DAY_FMT = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Berlin' });
@@ -916,7 +915,8 @@ export function createApp(db) {
       if (!isDate(from) || !isDate(to) || to < from) fail(400, 'Zeitraum: from und to als JJJJ-MM-TT, from ≤ to');
       if ((Date.parse(to) - Date.parse(from)) / 864e5 > 91) fail(400, 'Höchstens 92 Tage auf einmal');
     } else {
-      const days = { day: 1, week: 7, month: 30 }[qs.range];
+      const RANGES = { day: 1, week: 7, month: 30 };
+      const days = Object.hasOwn(RANGES, qs.range) && RANGES[qs.range];
       if (!days) fail(400, 'range: day, week oder month – oder from/to');
       from = plusDays(today, 1 - days);
       to = today;
@@ -927,7 +927,7 @@ export function createApp(db) {
 
   function analytics(range) {
     const { from_utc, to_utc } = range;
-    const orders = q(`SELECT o.*, u.email FROM orders o JOIN users u ON u.id = o.user_id
+    const orders = q(`SELECT o.*, u.walk_in FROM orders o JOIN users u ON u.id = o.user_id
       WHERE o.status = 'picked_up' AND o.pickup_at >= ? AND o.pickup_at < ?`).all(from_utc, to_utc);
     const itemsOf = q(`SELECT oi.*, m.name, m.category FROM order_items oi JOIN menu_items m ON m.id = oi.menu_item_id WHERE oi.order_id = ?`);
     const modsOf = q('SELECT name, group_name, price_cents FROM order_item_modifiers WHERE order_item_id = ?');
@@ -981,7 +981,7 @@ export function createApp(db) {
     const weekdays = WEEKDAY.map((day) => ({ day, revenue_cents: 0 }));
     for (const o of orders) weekdays[new Date(berlinTime(berlinDayOf(o.pickup_at), 12)).getUTCDay()].revenue_cents += o.total_cents;
     const hours = Array.from({ length: 11 }, (_, i) => ({ hour: 9 + i, orders: orders.filter((o) => berlinHourOf(o.pickup_at) === 9 + i).length }));
-    const walkin = orders.filter((o) => o.email === WALKIN_EMAIL).length;
+    const walkin = orders.filter((o) => o.walk_in).length;
     const ordersRevenue = orders.reduce((a, o) => a + o.total_cents, 0);
     const result = {
       range,

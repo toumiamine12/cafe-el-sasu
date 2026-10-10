@@ -188,15 +188,17 @@ export function mountFinance(root, alive) {
     $('ls-insights').innerHTML = a.insights.map((t) => `<li class="${t.tone}"><span class="tone" aria-label="${LABEL[t.tone]}">${ICON[t.tone]}</span><span>${esc(t.text)}</span></li>`).join('');
   }
 
+  let seq = 0; // only the newest request may paint (fast range clicks)
   async function load() {
+    const n = ++seq;
     $('fin-csv').href = `/api/admin/report.csv?${params}`;
     $('fin-kpis').classList.add('loading');
     let a;
     try { a = await api(`/api/admin/analytics?${params}`); } catch (err) {
-      if (alive()) $('fin-period').textContent = err.message;
+      if (alive() && n === seq) $('fin-period').textContent = err.message;
       return;
-    } finally { $('fin-kpis')?.classList.remove('loading'); }
-    if (!alive()) return;
+    } finally { if (n === seq) $('fin-kpis')?.classList.remove('loading'); }
+    if (!alive() || n !== seq) return;
     $('fin-period').textContent = a.range.from === a.range.to ? dayLabel(a.range.from) : `${dayLabel(a.range.from)} – ${dayLabel(a.range.to)} (${a.range.days} Tage)`;
     renderKpis(a.kpi);
     renderTimeline(a);

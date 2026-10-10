@@ -1131,3 +1131,18 @@ test('report CSV keeps negative amounts as numbers (no formula guard on -12,34)'
   assert.match(text, new RegExp(`\\r\\n${day};0,00;[\\d.]+,\\d\\d;-[\\d.]+,\\d\\d;0`), text.slice(-120));
   assert.ok(!text.includes("'-"), 'negative numbers are not prefixed');
 });
+
+test('analytics rejects inherited range names with 400, not 500', async () => {
+  const admin = await login('SASU-1000', 'admin123');
+  for (const r of ['constructor', 'toString', '__proto__']) assert.equal((await admin('GET', `/api/admin/analytics?range=${r}`)).status, 400, r);
+});
+
+test('counter orders are recognised by the walk-in flag, not by e-mail', async () => {
+  const admin = await login('SASU-1000', 'admin123');
+  const before = (await admin('GET', '/api/admin/analytics?range=month')).body.channels.walkin;
+  assert.ok(before > 0);
+  db.prepare("UPDATE users SET email = 'theke@cafe-elsasu.de' WHERE member_id = 'SASU-1006'").run();
+  try {
+    assert.equal((await admin('GET', '/api/admin/analytics?range=month')).body.channels.walkin, before);
+  } finally { db.prepare("UPDATE users SET email = 'gast@cafe-elsasu.de' WHERE member_id = 'SASU-1006'").run(); }
+});
