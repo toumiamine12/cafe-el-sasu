@@ -96,47 +96,14 @@
 
     <!--------------------------------------------------------Footer Section------------------------------------------------->
     <footer class="site-footer">
-      <svg class="ring" viewBox="0 0 200 200" aria-hidden="true">
-        <defs>
-          <filter id="stain" x="-20%" y="-20%" width="140%" height="140%">
-            <feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="3" seed="7" />
-            <feDisplacementMap in="SourceGraphic" scale="9" />
-          </filter>
-        </defs>
-        <g filter="url(#stain)" fill="none">
-          <circle cx="100" cy="100" r="78" stroke-width="7" opacity="0.55" />
-          <circle cx="103" cy="97" r="74" stroke-width="2" opacity="0.35" />
-          <path d="M40 140 A78 78 0 0 1 60 40" stroke-width="12" opacity="0.25" />
-        </g>
-      </svg>
-      <div class="foot-cols">
-        <div>
-          <h2>Besuch uns</h2>
-          <p>Einestraße 1a<br />47799 Krefeld</p>
-          <a href="https://www.google.com/maps/search/?api=1&amp;query=47799+Krefeld" target="_blank" rel="noopener">Route planen</a>
-        </div>
-        <div>
-          <h2>Öffnungszeiten</h2>
-          <ul class="foot-hours">
-            <li data-days="2,3,4,5"><span>Di – Fr</span><span>11 – 22 Uhr</span></li>
-            <li data-days="6,0"><span>Sa – So</span><span>10 – 24 Uhr</span></li>
-            <li data-days="1"><span>Montag</span><span>Ruhetag</span></li>
-          </ul>
-        </div>
-        <div>
-          <h2>Kontakt</h2>
-          <p><a href="tel:+4921518220">+49 2151 8220</a><br /><a href="mailto:info@cafe-elsasu.de">info@cafe-elsasu.de</a></p>
-        </div>
-      </div>
-      <p class="wordmark" aria-hidden="true">Café el Sasu</p>
-      <div class="foot-bottom">
-        <nav aria-label="Fußzeile">
-          <a href="menu.html">Speisekarte</a>
-          <a href="account.html">Mein Konto</a>
-          <a href="credits.html">Bildnachweise</a>
-        </nav>
-        <span>© 2026 Görkem Sari &amp; Miraç Subaşı</span>
-      </div>
+      <a class="foot-brand" href="index.html"><img src="photos/logo.png" alt="" width="32" height="32" />Café el Sasu</a>
+      <nav aria-label="Fußzeile">
+        <a href="menu.html">Speisekarte</a>
+        <a href="account.html">Mein Konto</a>
+        <a href="mailto:info@cafe-elsasu.de">Kontakt</a>
+        <a href="credits.html">Bildnachweise</a>
+      </nav>
+      <span class="foot-copy">© 2026 Görkem Sari &amp; Miraç Subaşı</span>
     </footer>
     <script src="app.js"></script>
     <script src="account.js"></script>
