@@ -187,7 +187,9 @@ body { font-family: var(--text); color: var(--espresso); }
 }
 .menu-bar .inner { max-width: 1040px; margin: 0 auto; padding: 10px 16px; display: flex; gap: 12px; align-items: center; }
 .menu-bar nav { display: flex; gap: 4px; overflow-x: auto; flex: 1; scrollbar-width: none; }
-.menu-bar nav a {
+.menu-bar nav button {
+    background: none;
+    border: none;
     padding: 8px 14px;
     border-radius: 999px;
     color: var(--roast);
@@ -195,7 +197,7 @@ body { font-family: var(--text); color: var(--espresso); }
     white-space: nowrap;
     text-decoration: none;
 }
-.menu-bar nav a[aria-current="true"] { background: var(--caramel); color: #fff; }
+.menu-bar nav button[aria-current="true"] { background: var(--caramel); color: #fff; }
 .menu-bar input {
     width: 220px;
     max-width: 40vw;
@@ -418,6 +420,8 @@ body { font-family: var(--text); color: var(--espresso); }
 .foot-brand { display: flex; align-items: center; gap: 10px; font-family: var(--display); font-style: italic; font-weight: 600; font-size: 20px; color: #fff !important; }
 .foot-brand img { border-radius: 50%; }
 .site-footer nav { display: flex; gap: 6px 24px; flex-wrap: wrap; }
+
+.table-scroll { overflow-x: auto; }
 
 /* --- admin --- */
 .table td, .table th { vertical-align: middle !important; }

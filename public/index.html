@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html>
+<html lang="de">
   <head>
     <meta charset="utf-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <title>Cafe el Sasu</title>
+    <title>Café el Sasu</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css"/>
     <link rel="stylesheet" type="text/css" media="screen" href="main.css" />
@@ -14,43 +14,54 @@
     <link rel="shortcut icon" type="image/x-icon" href="photos/logo.png"/>
   </head>
 
-  <body class="has-hero">
-    <!-----------------------------------------------------Navigation Bar-------------------------------------------------->
+  <body>
     <header class="site-nav" id="site-nav">
-      <a class="brand" href="index.html"><img src="photos/logo.png" alt="" width="44" height="44" /><span>Café el Sasu</span></a>
+      <a class="brand" href="#/"><img src="photos/logo.png" alt="" width="44" height="44" /><span>Café el Sasu</span></a>
       <nav class="nav-links" id="nav-links" aria-label="Hauptmenü">
-        <a href="index.html">Startseite</a>
-        <a href="menu.html">Speisekarte</a>
+        <a href="#/">Startseite</a>
+        <a href="#/speisekarte">Speisekarte</a>
       </nav>
       <div class="nav-actions" id="nav-actions"></div>
       <button class="nav-toggle" id="nav-toggle" type="button" aria-expanded="false" aria-controls="nav-links" aria-label="Menü öffnen">
         <span></span><span></span><span></span>
       </button>
     </header>
-    <!--------------------------------------------------------Hero-------------------------------------------------------->
-    <header class="opening-hours home-hero">
+
+    <main id="view"></main>
+
+    <footer class="site-footer">
+      <a class="foot-brand" href="#/"><img src="photos/logo.png" alt="" width="32" height="32" />Café el Sasu</a>
+      <nav aria-label="Fußzeile">
+        <a href="#/speisekarte">Speisekarte</a>
+        <a href="#/konto">Mein Konto</a>
+        <a href="mailto:info@cafe-elsasu.de">Kontakt</a>
+        <a href="#/bildnachweise">Bildnachweise</a>
+      </nav>
+      <span class="foot-copy">© 2026 Görkem Sari &amp; Miraç Subaşı</span>
+    </footer>
+
+    <template id="tpl-home">
+      <header class="opening-hours home-hero">
       <div class="hours-content">
         <h1 id="headline">Wo Kaffee <br />glücklich macht</h1>
         <p class="live" id="live-status" aria-live="polite">&nbsp;</p>
         <p class="pickup" id="next-pickup">&nbsp;</p>
         <div class="hero-actions">
-          <a class="btn-cafe" href="menu.html">Jetzt vorbestellen</a>
-          <a class="btn-light" id="hero-second" href="login.html">Mitglied werden</a>
+          <a class="btn-cafe" href="#/speisekarte">Jetzt vorbestellen</a>
+          <a class="btn-light" id="hero-second" href="#/login">Mitglied werden</a>
         </div>
       </div>
     </header>
 
-    <!--------------------------------------------------------Beliebt----------------------------------------------------->
     <section class="home-section">
       <div class="home-inner">
         <h2 class="home-title">Beliebt diese Woche</h2>
         <p class="home-sub">Das bestellen unsere Gäste gerade am häufigsten.</p>
         <div class="popular" id="popular"></div>
-        <p class="center"><a class="btn-ghost" href="menu.html">Ganze Speisekarte ansehen</a></p>
+        <p class="center"><a class="btn-ghost" href="#/speisekarte">Ganze Speisekarte ansehen</a></p>
       </div>
     </section>
 
-    <!--------------------------------------------------------So funktioniert's------------------------------------------->
     <section class="home-section paper">
       <div class="home-inner">
         <h2 class="home-title">So funktioniert's</h2>
@@ -62,7 +73,6 @@
       </div>
     </section>
 
-    <!--------------------------------------------------------Treueprogramm---------------------------------------------->
     <section class="home-section">
       <div class="home-inner">
         <h2 class="home-title">Treueprogramm</h2>
@@ -72,11 +82,10 @@
           <div class="tier-col Silver"><h3>Silver</h3><p class="need">ab 200 Punkten</p><ul><li>5 % Rabatt auf jede Bestellung</li><li>Gratis Kuchen ab 250 Punkten</li></ul></div>
           <div class="tier-col Gold"><h3>Gold</h3><p class="need">ab 500 Punkten</p><ul><li>10 % Rabatt auf jede Bestellung</li><li>Gratis Kaffee an deinem Geburtstag</li></ul></div>
         </div>
-        <p class="center" id="loyalty-cta"><a class="btn-cafe" href="login.html">Kostenlos Mitglied werden</a></p>
+        <p class="center" id="loyalty-cta"><a class="btn-cafe" href="#/login">Kostenlos Mitglied werden</a></p>
       </div>
     </section>
 
-    <!--------------------------------------------------------Über uns Section--------------------------------------------->
     <section class="about" id="ueber-uns">
       <div class="inner">
         <div>
@@ -94,7 +103,6 @@
       </div>
     </section>
 
-    <!--------------------------------------------------------Besuch uns-------------------------------------------------->
     <section class="home-section">
       <div class="home-inner visit">
         <div>
@@ -110,19 +118,233 @@
         <iframe title="Karte: Café el Sasu in Krefeld" loading="lazy" src="https://www.google.com/maps?q=47799+Krefeld&amp;z=14&amp;output=embed"></iframe>
       </div>
     </section>
+    </template>
 
-    <!--------------------------------------------------------Footer Section------------------------------------------------->
-    <footer class="site-footer">
-      <a class="foot-brand" href="index.html"><img src="photos/logo.png" alt="" width="32" height="32" />Café el Sasu</a>
-      <nav aria-label="Fußzeile">
-        <a href="menu.html">Speisekarte</a>
-        <a href="account.html">Mein Konto</a>
-        <a href="mailto:info@cafe-elsasu.de">Kontakt</a>
-        <a href="credits.html">Bildnachweise</a>
-      </nav>
-      <span class="foot-copy">© 2026 Görkem Sari &amp; Miraç Subaşı</span>
-    </footer>
-    <script src="app.js"></script>
-    <script src="home.js"></script>
+    <template id="tpl-speisekarte">
+      <header class="menu-hero">
+      <h1>Speisekarte</h1>
+      <p>Online vorbestellen, in 15 Minuten abholen, Punkte sammeln.</p>
+    </header>
+
+    <div class="menu-bar">
+      <div class="inner">
+        <nav id="cat-nav" aria-label="Kategorien"></nav>
+        <label class="sr-only" for="search">Speisekarte durchsuchen</label>
+        <input id="search" type="search" placeholder="Suchen…" autocomplete="off" />
+      </div>
+    </div>
+
+    <div id="menu-root" aria-live="polite"><p class="menu-empty muted">Speisekarte wird geladen…</p></div>
+
+    <dialog class="item-dialog" id="item-dialog" aria-labelledby="dlg-name">
+      <button class="dlg-close" type="button" id="dlg-close" aria-label="Schließen">×</button>
+      <img id="dlg-img" alt="" />
+      <div class="body">
+        <h2 id="dlg-name"></h2>
+        <p class="muted" id="dlg-desc"></p>
+        <div id="dlg-tags"></div>
+        <div class="actions">
+          <div class="qty">
+            <button type="button" id="dlg-minus" aria-label="Weniger">−</button>
+            <span id="dlg-qty">1</span>
+            <button type="button" id="dlg-plus" aria-label="Mehr">+</button>
+          </div>
+          <button class="btn-cafe" type="button" id="dlg-add"></button>
+        </div>
+      </div>
+    </dialog>
+
+    <div class="cart-bar" id="cart-bar" hidden>
+      <span id="cart-bar-text"></span>
+      <a class="btn-cafe" href="#/warenkorb">Zur Kasse</a>
+    </div>
+    </template>
+
+    <template id="tpl-warenkorb">
+      <div class="page">
+      <section class="panel">
+        <h2>Dein Warenkorb</h2>
+        <div id="cart-lines" aria-live="polite"></div>
+        <div class="totals" id="totals"></div>
+      </section>
+      <section class="panel" id="checkout">
+        <h2>Abholung</h2>
+        <form id="order-form" class="form-cafe">
+          <label for="pickup">Abholzeit</label>
+          <select id="pickup" required></select>
+          <label for="reward">Prämie einlösen</label>
+          <select id="reward"><option value="">Keine Prämie</option></select>
+          <p class="muted" id="discount-note"></p>
+          <p class="error" id="error" role="alert"></p>
+          <button class="btn-cafe" type="submit" id="place">Vorbestellen – bezahlt wird bei Abholung</button>
+        </form>
+      </section>
+    </div>
+    </template>
+
+    <template id="tpl-login">
+      <div class="page" style="max-width:480px">
+      <section class="panel" id="logged-in" hidden>
+        <h2>Du bist eingeloggt</h2>
+        <p id="logged-in-as"></p>
+        <p class="login-actions"><a class="btn-cafe" id="continue" href="#/konto">Weiter</a> <button class="btn-ghost" type="button" id="logout">Ausloggen</button></p>
+      </section>
+      <section class="panel" id="login-panel">
+        <h2 id="form-title">Einloggen</h2>
+        <form id="auth-form" class="form-cafe" novalidate>
+          <div id="register-fields" hidden>
+            <label for="name">Name</label>
+            <input id="name" autocomplete="name" />
+            <label for="email">E-Mail</label>
+            <input id="email" type="email" autocomplete="email" />
+            <label for="birthday">Geburtstag <span class="muted">(optional, für deine Geburtstagsüberraschung)</span></label>
+            <input id="birthday" type="date" />
+          </div>
+          <div id="login-fields">
+            <label for="id">Mitgliedsnummer oder E-Mail</label>
+            <input id="id" autocomplete="username" placeholder="SASU-1003" />
+          </div>
+          <label for="password">Passwort</label>
+          <input id="password" type="password" autocomplete="current-password" />
+          <p class="error" id="error" role="alert"></p>
+          <button class="btn-cafe" type="submit" id="submit" style="width:100%">Einloggen</button>
+        </form>
+        <p style="margin-top:16px;text-align:center">
+          <button class="btn-ghost" id="toggle" type="button">Noch kein Mitglied? Jetzt registrieren</button>
+        </p>
+        <p class="muted" style="font-size:13px;text-align:center">Kunden, Personal und Admin loggen sich hier ein.<br />Demo: SASU-1003 / demo123 · SASU-1001 / staff123 · SASU-1000 / admin123</p>
+      </section>
+    </div>
+    </template>
+
+    <template id="tpl-konto">
+      <section class="welcome">
+      <div class="inner">
+        <div>
+          <h1 id="greeting">Willkommen</h1>
+          <p id="welcome-sub"></p>
+        </div>
+        <div class="member-card" id="card"></div>
+      </div>
+    </section>
+
+    <div class="page">
+      <div class="tabs" role="tablist" id="acc-tabs">
+        <button role="tab" id="tab-overview" aria-controls="overview" data-tab="overview">Übersicht</button>
+        <button role="tab" id="tab-orders" aria-controls="orders" data-tab="orders">Bestellungen</button>
+        <button role="tab" id="tab-profile" aria-controls="profile" data-tab="profile">Profil</button>
+      </div>
+
+      <section role="tabpanel" id="overview" aria-labelledby="tab-overview">
+        <div class="stats" id="stats"></div>
+        <div class="panel" id="active-panel" hidden>
+          <h2>Gerade in Arbeit</h2>
+          <div id="active-orders" aria-live="polite"></div>
+        </div>
+        <div class="panel">
+          <h2>Prämien</h2>
+          <p class="muted">1 Punkt pro Euro, gutgeschrieben bei Abholung. Einlösen kannst du Prämien im Warenkorb.</p>
+          <div id="rewards"></div>
+        </div>
+      </section>
+
+      <section role="tabpanel" id="orders" aria-labelledby="tab-orders" hidden>
+        <div class="panel">
+          <h2>Bestellverlauf</h2>
+          <div id="order-list"></div>
+        </div>
+      </section>
+
+      <section role="tabpanel" id="profile" aria-labelledby="tab-profile" hidden>
+        <div class="panel">
+          <h2>Persönliche Daten</h2>
+          <form id="profile-form" class="form-cafe">
+            <div class="form-row">
+              <div><label for="p-name">Name</label><input id="p-name" autocomplete="name" required /></div>
+              <div><label for="p-email">E-Mail</label><input id="p-email" type="email" autocomplete="email" required /></div>
+              <div><label for="p-birthday">Geburtstag</label><input id="p-birthday" type="date" /></div>
+              <div><label for="p-member">Mitgliedsnummer</label><input id="p-member" readonly /></div>
+            </div>
+            <p class="error" id="profile-error" role="alert"></p>
+            <button class="btn-cafe" type="submit">Änderungen speichern</button>
+          </form>
+        </div>
+        <div class="panel">
+          <h2>Passwort ändern</h2>
+          <form id="password-form" class="form-cafe">
+            <div class="form-row">
+              <div><label for="pw-current">Aktuelles Passwort</label><input id="pw-current" type="password" autocomplete="current-password" required /></div>
+              <div><label for="pw-next">Neues Passwort</label><input id="pw-next" type="password" autocomplete="new-password" minlength="6" required /></div>
+            </div>
+            <p class="error" id="password-error" role="alert"></p>
+            <button class="btn-cafe" type="submit">Passwort ändern</button>
+          </form>
+        </div>
+        <p><button class="btn-ghost" id="logout">Ausloggen</button></p>
+      </section>
+    </div>
+    </template>
+
+    <template id="tpl-admin">
+      <div class="page" style="max-width:1100px">
+
+      <div id="dash">
+        <div class="tabs" id="admin-tabs" role="tablist">
+          <button data-tab="orders" aria-pressed="true">Bestellungen</button>
+          <button data-tab="staff">Personal</button>
+          <button data-tab="finance" data-admin>Finanzen</button>
+          <button data-tab="menu" data-admin>Speisekarte</button>
+        </div>
+
+        <section class="panel" data-panel="orders">
+          <h2>Offene Bestellungen</h2>
+          <div id="open-orders" aria-live="polite"></div>
+        </section>
+
+        <section class="panel" data-panel="staff" hidden>
+          <h2>Arbeitszeit</h2>
+          <p><button class="btn-cafe" id="clock"></button></p>
+          <table class="table" id="staff-table"></table>
+        </section>
+
+        <section class="panel" data-panel="finance" hidden>
+          <h2>Finanzen</h2>
+          <div class="tabs" id="range" style="justify-content:flex-start">
+            <button data-range="day">Heute</button>
+            <button data-range="week" aria-pressed="true">7 Tage</button>
+            <button data-range="month">30 Tage</button>
+          </div>
+          <div class="stats" id="stats"></div>
+          <h3>Top 5 Artikel</h3>
+          <div id="top"></div>
+        </section>
+
+        <section class="panel" data-panel="menu" hidden>
+          <h2>Speisekarte verwalten</h2>
+          <form id="new-item" class="form-cafe stats">
+            <div><label for="ni-name">Name</label><input id="ni-name" required /></div>
+            <div><label for="ni-cat">Kategorie</label>
+              <select id="ni-cat"><option value="coffee">Kaffee</option><option value="cold">Kalt</option><option value="cake">Kuchen</option><option value="pastry">Gebäck</option></select></div>
+            <div><label for="ni-price">Preis (€)</label><input id="ni-price" type="number" step="0.01" min="0.01" required /></div>
+            <div><label>&nbsp;</label><button class="btn-cafe" type="submit">Hinzufügen</button></div>
+          </form>
+          <table class="table" id="menu-table"></table>
+        </section>
+        <p style="text-align:center"><button class="btn-ghost" id="logout">Ausloggen</button></p>
+      </div>
+    </div>
+    </template>
+
+    <template id="tpl-bildnachweise">
+      <div class="page">
+      <section class="panel">
+        <h2>Bildnachweise</h2>
+        <p class="muted">Die Fotos der neuen Speisekarten-Artikel stammen von Wikimedia Commons und Flickr und stehen unter freien Creative-Commons-Lizenzen. Sie wurden nur verkleinert. Alle anderen Fotos gehören dem Café El Sasu.</p>
+        <div class="table-scroll"><table class="table"><thead><tr><th></th><th>Titel</th><th>Urheber</th><th>Lizenz &amp; Quelle</th></tr></thead><tbody><tr><td><img src="photos/menu/espresso.jpg" alt="" width="56" height="56" style="object-fit:cover;border-radius:6px" /></td><td>Espresso shot</td><td>Rum Bucolic Ape</td><td><a href="https://www.flickr.com/photos/70521654@N00/6828131856" target="_blank" rel="noopener">CC BY-ND 2.0</a></td></tr><tr><td><img src="photos/menu/americano.jpg" alt="" width="56" height="56" style="object-fit:cover;border-radius:6px" /></td><td>Americano Coffee</td><td>Mark Morgan Trinidad B</td><td><a href="https://www.flickr.com/photos/46102325@N06/16608533770" target="_blank" rel="noopener">CC BY 2.0</a></td></tr><tr><td><img src="photos/menu/flatwhite.jpg" alt="" width="56" height="56" style="object-fit:cover;border-radius:6px" /></td><td>Flat white coffee at Axil Coffee in Hawthorn</td><td>ultrakml</td><td><a href="https://www.flickr.com/photos/34948727@N00/17350959312" target="_blank" rel="noopener">CC BY 2.0</a></td></tr><tr><td><img src="photos/menu/caramellatte.jpg" alt="" width="56" height="56" style="object-fit:cover;border-radius:6px" /></td><td>A cafe table with a chocolate brownie topped with vanilla ice cream and chocolate sauce, flanked by two iced caramel lattes and a hot latte with latte art, served on wooden trays at a modern cafe in Nepal.</td><td>Manjil Aryal</td><td><a href="https://wordpress.org/photos/photo/296a28368a/" target="_blank" rel="noopener">CC CC0 1.0</a></td></tr><tr><td><img src="photos/menu/pistachiolatte.jpg" alt="" width="56" height="56" style="object-fit:cover;border-radius:6px" /></td><td>Caffe Latte, Flat White - Apte AUD3.50 each</td><td>avlxyz</td><td><a href="https://www.flickr.com/photos/10559879@N00/4104868359" target="_blank" rel="noopener">CC BY-SA 2.0</a></td></tr><tr><td><img src="photos/menu/chailatte.jpg" alt="" width="56" height="56" style="object-fit:cover;border-radius:6px" /></td><td>Pumpkin muffin and Chai tea latte</td><td>moonlightbulb</td><td><a href="https://www.flickr.com/photos/24532534@N02/8065460539" target="_blank" rel="noopener">CC BY 2.0</a></td></tr><tr><td><img src="photos/menu/coldbrew.jpg" alt="" width="56" height="56" style="object-fit:cover;border-radius:6px" /></td><td>cold brew coffee</td><td>shalommama</td><td><a href="https://www.flickr.com/photos/77516069@N05/13610569685" target="_blank" rel="noopener">CC BY 2.0</a></td></tr><tr><td><img src="photos/menu/icedmatcha.jpg" alt="" width="56" height="56" style="object-fit:cover;border-radius:6px" /></td><td>Iced matcha latte</td><td>aehdeschaine</td><td><a href="https://www.flickr.com/photos/79016591@N07/14821389450" target="_blank" rel="noopener">CC BY-ND 2.0</a></td></tr><tr><td><img src="photos/menu/basque.jpg" alt="" width="56" height="56" style="object-fit:cover;border-radius:6px" /></td><td>2022.10.13 Keto Burnt Basque Cheesecake, Washington, DC USA 286 38233-Edit</td><td>tedeytan</td><td><a href="https://www.flickr.com/photos/22526649@N03/52425625463" target="_blank" rel="noopener">CC BY-SA 2.0</a></td></tr><tr><td><img src="photos/menu/redvelvet.jpg" alt="" width="56" height="56" style="object-fit:cover;border-radius:6px" /></td><td>Red Velvet Cake Slice</td><td>Mr.TinDC</td><td><a href="https://www.flickr.com/photos/7471115@N08/2491265448" target="_blank" rel="noopener">CC BY-ND 2.0</a></td></tr><tr><td><img src="photos/menu/kunefe.jpg" alt="" width="56" height="56" style="object-fit:cover;border-radius:6px" /></td><td>Kunefe, $10: Mado Cafe, Auburn. Sydney Food Blog Review</td><td>insatiablemunch</td><td><a href="https://www.flickr.com/photos/48041244@N05/23953808884" target="_blank" rel="noopener">CC BY 2.0</a></td></tr><tr><td><img src="photos/menu/croissant.jpg" alt="" width="56" height="56" style="object-fit:cover;border-radius:6px" /></td><td>Croissant</td><td>Blarvar</td><td><a href="https://www.flickr.com/photos/46583370@N04/4599562280" target="_blank" rel="noopener">CC PDM 1.0</a></td></tr><tr><td><img src="photos/menu/cinnamonroll.jpg" alt="" width="56" height="56" style="object-fit:cover;border-radius:6px" /></td><td>cinnamon rolls</td><td>EvelynGiggles</td><td><a href="https://www.flickr.com/photos/23797059@N02/3802433831" target="_blank" rel="noopener">CC BY 2.0</a></td></tr><tr><td><img src="photos/menu/cookie.jpg" alt="" width="56" height="56" style="object-fit:cover;border-radius:6px" /></td><td>Browned butter chocolate chip cookies</td><td>grongar</td><td><a href="https://www.flickr.com/photos/70757891@N00/7133349441" target="_blank" rel="noopener">CC BY 2.0</a></td></tr><tr><td><img src="photos/menu/brownie.jpg" alt="" width="56" height="56" style="object-fit:cover;border-radius:6px" /></td><td>Chocolate Brownies</td><td>KJGarbutt</td><td><a href="https://www.flickr.com/photos/25187937@N05/5646828540" target="_blank" rel="noopener">CC BY 2.0</a></td></tr><tr><td><img src="photos/menu/cortado.jpg" alt="" width="56" height="56" style="object-fit:cover;border-radius:6px" /></td><td>cortado - coffee</td><td>Retinafunk</td><td><a href="https://www.flickr.com/photos/59328597@N00/5453627200" target="_blank" rel="noopener">CC BY-SA 2.0</a></td></tr><tr><td><img src="photos/menu/spanishlatte.jpg" alt="" width="56" height="56" style="object-fit:cover;border-radius:6px" /></td><td>ice Coffee Latte</td><td>junyaogura</td><td><a href="https://www.flickr.com/photos/73344268@N00/4823376116" target="_blank" rel="noopener">CC BY 2.0</a></td></tr><tr><td><img src="photos/menu/melange.jpg" alt="" width="56" height="56" style="object-fit:cover;border-radius:6px" /></td><td>Wiener melange</td><td>Michela Simoncini</td><td><a href="https://www.flickr.com/photos/59422190@N00/5764347621" target="_blank" rel="noopener">CC BY 2.0</a></td></tr><tr><td><img src="photos/menu/hotchocolate.jpg" alt="" width="56" height="56" style="object-fit:cover;border-radius:6px" /></td><td>Hot Chocolate Mug</td><td>nick.amoscato</td><td><a href="https://www.flickr.com/photos/91374488@N07/24458561497" target="_blank" rel="noopener">CC BY 2.0</a></td></tr><tr><td><img src="photos/menu/icedcaramel.jpg" alt="" width="56" height="56" style="object-fit:cover;border-radius:6px" /></td><td>Iced Caramel Macchiato</td><td>Darrin Marion</td><td><a href="https://www.flickr.com/photos/79086601@N06/13903837402" target="_blank" rel="noopener">CC BY 2.0</a></td></tr><tr><td><img src="photos/menu/espressotonic.jpg" alt="" width="56" height="56" style="object-fit:cover;border-radius:6px" /></td><td>espresso tonic season is the best season :-) 20180521_151301</td><td>roland</td><td><a href="https://www.flickr.com/photos/35034347371@N01/42266165251" target="_blank" rel="noopener">CC CC0 1.0</a></td></tr><tr><td><img src="photos/menu/icedchocolate.jpg" alt="" width="56" height="56" style="object-fit:cover;border-radius:6px" /></td><td>Espresso Milkshake</td><td>rick</td><td><a href="https://www.flickr.com/photos/35034361412@N01/2300421017" target="_blank" rel="noopener">CC BY 2.0</a></td></tr><tr><td><img src="photos/menu/carrotcake.jpg" alt="" width="56" height="56" style="object-fit:cover;border-radius:6px" /></td><td>Carrot Cake</td><td>rexipe</td><td><a href="https://www.flickr.com/photos/7352088@N08/826987087" target="_blank" rel="noopener">CC BY 2.0</a></td></tr><tr><td><img src="photos/menu/blackforest.jpg" alt="" width="56" height="56" style="object-fit:cover;border-radius:6px" /></td><td>Black Forest Cake</td><td>kimberlykv</td><td><a href="https://www.flickr.com/photos/87542849@N00/3558891035" target="_blank" rel="noopener">CC BY 2.0</a></td></tr><tr><td><img src="photos/menu/lemontart.jpg" alt="" width="56" height="56" style="object-fit:cover;border-radius:6px" /></td><td>Lemon Tart - Queen of Tarts</td><td>avlxyz</td><td><a href="https://www.flickr.com/photos/10559879@N00/2478451116" target="_blank" rel="noopener">CC BY-SA 2.0</a></td></tr><tr><td><img src="photos/menu/tiramisu.jpg" alt="" width="56" height="56" style="object-fit:cover;border-radius:6px" /></td><td>Mango Tiramisu 5</td><td>Key West Wedding Photography</td><td><a href="https://www.flickr.com/photos/58003213@N00/52154674165" target="_blank" rel="noopener">CC BY 2.0</a></td></tr><tr><td><img src="photos/menu/painauchocolat.jpg" alt="" width="56" height="56" style="object-fit:cover;border-radius:6px" /></td><td>Pain au chocolat</td><td>cowlet</td><td><a href="https://www.flickr.com/photos/17189662@N00/2812135572" target="_blank" rel="noopener">CC BY 2.0</a></td></tr><tr><td><img src="photos/menu/macarons.jpg" alt="" width="56" height="56" style="object-fit:cover;border-radius:6px" /></td><td>Macaron</td><td>Takashi(aes256)</td><td><a href="https://www.flickr.com/photos/46151146@N04/6225883349" target="_blank" rel="noopener">CC BY-SA 2.0</a></td></tr><tr><td><img src="photos/menu/profiteroles.jpg" alt="" width="56" height="56" style="object-fit:cover;border-radius:6px" /></td><td>Profiteroles - Chimmy&#x27;s Bakery, Richmond</td><td>avlxyz</td><td><a href="https://www.flickr.com/photos/10559879@N00/2363876228" target="_blank" rel="noopener">CC BY-SA 2.0</a></td></tr><tr><td><img src="photos/menu/churros.jpg" alt="" width="56" height="56" style="object-fit:cover;border-radius:6px" /></td><td>Churros with Chocolate Sauce - Chocolateria San Churro</td><td>avlxyz</td><td><a href="https://www.flickr.com/photos/10559879@N00/348229335" target="_blank" rel="noopener">CC BY-SA 2.0</a></td></tr></tbody></table></div>
+      </section>
+    </div>
+    </template>
+
+    <script type="module" src="router.js"></script>
   </body>
 </html>

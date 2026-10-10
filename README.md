@@ -12,6 +12,10 @@ Built with **Node.js, Express and SQLite** (`node:sqlite`). The frontend is plai
 
 ## Features
 
+**One app, one login**
+- Single-page app: everything runs from `index.html` with hash routes — `#/`, `#/speisekarte`, `#/warenkorb`, `#/login`, `#/konto`, `#/admin`, `#/bildnachweise`. No page reloads; back button, refresh and bookmarks work.
+- One login form for customers, staff and admin. The account decides where you land: customers → `#/konto`, staff/admin → `#/admin`. Protected routes send you to login and back.
+
 **Startseite**
 - Live status: "Jetzt geöffnet · bis 22:00 Uhr" or when it opens next, plus the earliest pickup time
 - "Beliebt diese Woche": the real top 4 best-sellers of the last 7 days, addable to the cart
@@ -33,7 +37,7 @@ Built with **Node.js, Express and SQLite** (`node:sqlite`). The frontend is plai
 - Rewards: free pastry (50), free coffee (100), free cake (250), birthday coffee for Gold members
 - Redeeming never drops your tier; cancelling refunds the reward points
 
-**Staff & admin** (`/admin.html`)
+**Staff & admin** (`#/admin`)
 - Order queue: Eingegangen → In Zubereitung → Abholbereit → Abgeholt
 - Clock in/out, hours per person for the last 7 and 30 days
 - Admin only: revenue, wage cost, profit, order count, average order value, top 5 items (today / 7 / 30 days)
@@ -48,7 +52,7 @@ Needs Node.js 22.13 or newer.
 ```bash
 npm install
 npm start          # http://localhost:3000
-npm test           # 39 API + rules tests
+npm test           # 41 API + rules tests
 ```
 
 The database (`data/cafe.db`) is created and filled with demo data on first start. Delete `data/` to reset.
@@ -79,7 +83,10 @@ server/app.js        Express routes (auth, orders, admin)
 server/rules.js      pure business rules: tiers, opening hours, pricing, points
 server/db.js         schema, password hashing
 server/seed.js       demo menu, users, a month of order history
-public/              the website (HTML/CSS/JS, photos)
+public/index.html    the whole site: navbar, footer, one <template> per view
+public/router.js     hash router + route guards
+public/app.js        shared helpers, session, navbar
+public/views/        one module per view (home, menu, cart, login, account, admin, credits)
 test/                node --test suites
 ```
 
