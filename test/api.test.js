@@ -323,3 +323,24 @@ test('popular returns up to 4 active items, best sellers first', async () => {
   assert.ok(list.every((i) => i.active === 1 && i.sold >= 0));
   assert.ok(list[0].sold >= list[3].sold);
 });
+
+// --- single-page app -----------------------------------------------------------
+
+test('login returns role for each account type', async () => {
+  for (const [id, pw, role] of [['SASU-1003', 'demo123', 'customer'], ['SASU-1001', 'staff123', 'staff'], ['SASU-1000', 'admin123', 'admin']]) {
+    const r = await client()('POST', '/api/login', { id, password: pw });
+    assert.equal(r.body.role, role, id);
+  }
+});
+
+test('old page URLs redirect to hash routes', async () => {
+  const map = {
+    '/menu.html': '/#/speisekarte', '/order.html': '/#/warenkorb', '/login.html': '/#/login',
+    '/account.html': '/#/konto', '/admin.html': '/#/admin', '/credits.html': '/#/bildnachweise', '/about.html': '/#/',
+  };
+  for (const [old, target] of Object.entries(map)) {
+    const res = await fetch(base + old, { redirect: 'manual' });
+    assert.equal(res.status, 301, old);
+    assert.equal(res.headers.get('location'), target, old);
+  }
+});

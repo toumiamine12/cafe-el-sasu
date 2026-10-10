@@ -29,6 +29,12 @@ const isBirthday = (u) => !!u.birthday && u.birthday.slice(5) === berlinDay.form
 export function createApp(db) {
   const app = express();
   app.use(express.json({ limit: '20kb' }));
+  // The site is one page now; old page addresses point to their hash route.
+  const OLD_PAGES = {
+    '/menu.html': '/#/speisekarte', '/order.html': '/#/warenkorb', '/login.html': '/#/login',
+    '/account.html': '/#/konto', '/admin.html': '/#/admin', '/credits.html': '/#/bildnachweise', '/about.html': '/#/',
+  };
+  for (const [old, target] of Object.entries(OLD_PAGES)) app.get(old, (req, res) => res.redirect(301, target));
   app.use(express.static(PUBLIC));
 
   const q = (sql) => db.prepare(sql);
