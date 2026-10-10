@@ -136,7 +136,7 @@ function secret(envName, label, ids) {
 }
 
 export function seed(db) {
-  const pw = { ADMIN: secret('ADMIN_PASSWORD', 'Admin', 'SASU-1000'), STAFF: secret('STAFF_PASSWORD', 'Personal', 'SASU-1001, SASU-1002') };
+  const pw = { ADMIN: secret('ADMIN_PASSWORD', 'Admin', 'SASU-1000'), STAFF: secret('STAFF_PASSWORD', 'Personal', 'alle 7 Mitarbeiter: SASU-1001, -1002, -1007 bis -1011') };
   tx(db, () => {
     const m = db.prepare('INSERT INTO menu_items (name, description, category, price_cents, photo, tags) VALUES (?, ?, ?, ?, ?, ?)');
     for (const [n, d, c, p, photo, tags] of MENU) m.run(n, d, c, p, `photos/${photo}`, tags);
