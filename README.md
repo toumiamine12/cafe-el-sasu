@@ -100,7 +100,7 @@ Needs Node.js 22.13 or newer.
 ```bash
 npm install
 npm start          # http://localhost:3000
-npm test           # 118 API + rules tests
+npm test           # 119 API + rules tests
 ```
 
 The database (`data/cafe.db`) is created and filled with demo data on first start. Delete `data/` to reset.

@@ -1046,7 +1046,7 @@ export function createApp(db) {
   // Text that starts like a formula (= + - @) gets a leading ' so Excel shows it instead of running it.
   const csvCell = (v) => {
     let t = String(v);
-    if (/^[=+\-@\t\r]/.test(t)) t = `'${t}`;
+    if (/^[=+\-@\t\r]/.test(t) && !/^-[\d.]+(,\d+)?$/.test(t)) t = `'${t}`; // plain negative amounts stay numbers
     return /[;"\r\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
   };
 

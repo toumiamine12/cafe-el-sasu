@@ -72,7 +72,7 @@ export function mountFinance(root, alive) {
     const card = (label, value, hint, cls = '') => `<div class="stat kpi"><div class="label">${label}</div><div class="value ${cls}">${value}</div><div class="hint">${hint}</div></div>`;
     $('fin-kpis').innerHTML =
       card('Brutto-Umsatz', eur0(k.gross_cents), 'abgeholte Bestellungen inkl. Extras + Kaffeebohnen')
-      + card('Netto-Gewinn', eur0(k.net_cents), 'Umsatz minus Personalkosten', k.net_cents < 0 ? 'neg' : 'pos')
+      + card('Netto-Gewinn', eur0(k.net_cents), 'Umsatz minus Personalkosten, noch inkl. MwSt', k.net_cents < 0 ? 'neg' : 'pos')
       + card('Personalkosten', eur0(k.labor_cents), `Quote ${pct(k.labor_ratio)} vom Umsatz`, k.labor_ratio > 0.35 ? 'warn' : '')
       + card('Bestellungen', k.orders.toLocaleString('de-DE'), `Ø Bestellwert ${eur(k.avg_ticket_cents)}`)
       + card('Rabatte & Prämien', eur0(k.discounts_cents), `${k.rewards} Prämien · ${k.gifts} Gutscheine eingelöst`);
@@ -146,12 +146,12 @@ export function mountFinance(root, alive) {
       const d = c.share >= 0.9999
         ? `M${C - R1},${C} a${R1},${R1} 0 1,0 ${2 * R1},0 a${R1},${R1} 0 1,0 ${-2 * R1},0 M${C - R0},${C} a${R0},${R0} 0 1,1 ${2 * R0},0 a${R0},${R0} 0 1,1 ${-2 * R0},0`
         : `M${x0},${y0} A${R1},${R1} 0 ${large},1 ${x1},${y1} L${x2},${y2} A${R0},${R0} 0 ${large},0 ${x3},${y3} Z`;
-      svg += `<path d="${d}" fill="${SLOT[i]}" stroke="#fff8ef" stroke-width="2" fill-rule="evenodd" tabindex="0" data-tip="${esc(`<strong>${c.label}</strong><br>${eur(c.revenue_cents)} · ${pct(c.share)}`)}" aria-label="${c.label} ${pct(c.share)}"/>`;
+      svg += `<path d="${d}" fill="${SLOT[i]}" stroke="#fff8ef" stroke-width="2" fill-rule="evenodd" tabindex="0" data-tip="${esc(`<strong>${esc(c.label)}</strong><br>${eur(c.revenue_cents)} · ${pct(c.share)}`)}" aria-label="${c.label} ${pct(c.share)}"/>`;
       a0 = a1;
     });
     svg += `<text class="donut-total" x="${C}" y="${C - 2}" text-anchor="middle">${eur0(gross)}</text><text class="tick" x="${C}" y="${C + 16}" text-anchor="middle">Umsatz</text></svg>`;
     $('ch-categories').innerHTML = svg;
-    $('lg-categories').innerHTML = cats.map((c, i) => `<li><i class="sw" style="background:${SLOT[i]}"></i><span>${c.label}</span><b>${pct(c.share)}</b><small>${eur0(c.revenue_cents)}</small></li>`).join('');
+    $('lg-categories').innerHTML = cats.map((c, i) => `<li><i class="sw" style="background:${SLOT[i]}"></i><span>${esc(c.label)}</span><b>${pct(c.share)}</b><small>${eur0(c.revenue_cents)}</small></li>`).join('');
   }
 
   // --- 4. top 10 items: ranked horizontal bars with values at the bar ends -------------------------------
@@ -166,7 +166,7 @@ export function mountFinance(root, alive) {
       svg += `<text class="cat" x="${L - 10}" y="${y + 16}" text-anchor="end">${esc(it.name)}</text>`;
       svg += `<path fill="${SLOT[0]}" d="M${L},${y + 4} h${w - 4} q4,0 4,4 v${rowH - 16} q0,4 -4,4 h${-(w - 4)} z"/>`;
       svg += `<text class="val" x="${L + w + 8}" y="${y + 16}">${eur0(it.revenue_cents)}</text>`;
-      svg += `<rect class="hit" x="0" y="${y}" width="${W}" height="${rowH}" tabindex="0" data-tip="${esc(`<strong>${it.name}</strong><br>${it.qty}× verkauft · ${eur(it.revenue_cents)}`)}" aria-label="${esc(it.name)}"/>`;
+      svg += `<rect class="hit" x="0" y="${y}" width="${W}" height="${rowH}" tabindex="0" data-tip="${esc(`<strong>${esc(it.name)}</strong><br>${it.qty}× verkauft · ${eur(it.revenue_cents)}`)}" aria-label="${esc(it.name)}"/>`;
     });
     $('ch-top').innerHTML = svg + '</svg>';
   }

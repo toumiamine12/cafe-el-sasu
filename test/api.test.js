@@ -1121,3 +1121,13 @@ test('report CSV for the same range', async () => {
   }
   assert.ok(lines.includes('Datum;Umsatz;Personalkosten;Ergebnis;Bestellungen'));
 });
+
+test('report CSV keeps negative amounts as numbers (no formula guard on -12,34)', async () => {
+  const admin = await login('SASU-1000', 'admin123');
+  const day = new Date(Date.now() - 80 * 864e5).toISOString().slice(0, 10);
+  db.prepare("INSERT INTO shifts (user_id, clock_in, clock_out) VALUES (2, ?, ?)").run(`${day}T08:00:00.000Z`, `${day}T12:00:00.000Z`);
+  const res = await fetch(`${base}/api/admin/report.csv?from=${day}&to=${day}`, { headers: { cookie: await cookieOf(admin) } });
+  const text = await res.text();
+  assert.match(text, new RegExp(`\\r\\n${day};0,00;[\\d.]+,\\d\\d;-[\\d.]+,\\d\\d;0`), text.slice(-120));
+  assert.ok(!text.includes("'-"), 'negative numbers are not prefixed');
+});
